@@ -1,0 +1,285 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  OWNER
+  MANAGER
+  STAFF
+  CUSTOMER
+}
+
+enum PaymentStatus {
+  /// 尚未付款
+  UNPAID
+  /// 已付款
+  PAID
+}
+
+enum OrderStatus {
+  /// 準備中（尚未輪到開始製作）
+  QUEUED
+  /// 製作中（Kitchen Display 主要狀態之一）
+  IN_PROGRESS
+  /// 待取貨 / 可出餐
+  READY_FOR_PICKUP
+  /// 已完成
+  COMPLETED
+  /// 已取消
+  CANCELLED
+}
+
+model Brand {
+  id        String   @id @default(cuid())
+  name      String
+  subdomain String   @unique
+  users     User[]
+  stores    Store[]
+  ingredients Ingredient[]
+  inventories Inventory[]
+  menuItems  MenuItem[]
+  orders     Order[]
+  createdAt DateTime @default(now())
+}
+
+model User {
+  id            String    @id @default(cuid())
+  name          String?
+  email         String
+  emailVerified DateTime?
+  image         String?
+  password      String
+  role          Role
+  brandId       String?
+  brand         Brand?    @relation(fields: [brandId], references: [id], onDelete: Cascade)
+  storeId       String?
+  store         Store?    @relation(fields: [storeId], references: [id], onDelete: SetNull)
+  accounts      Account[]
+  sessions      Session[]
+  createdAt     DateTime  @default(now())
+
+  @@unique([email, brandId])
+}
+
+model Store {
+  id        String   @id @default(cuid())
+  name      String
+  brandId   String
+  brand     Brand    @relation(fields: [brandId], references: [id], onDelete: Cascade)
+  users     User[]
+  orders    Order[]
+  orderCounters OrderCounter[]
+  ingredients Ingredient[]
+  inventories Inventory[]
+  menuItems  MenuItem[]
+  createdAt DateTime @default(now())
+}
+
+model Ingredient {
+  id        String      @id @default(cuid())
+  name      String
+  unit      String      @default("份")
+  brandId   String
+  brand     Brand       @relation(fields: [brandId], references: [id], onDelete: Cascade)
+  storeId   String?
+  store     Store?      @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  inventories Inventory[]           @relation("IngredientInventories")
+  menuItemIngredients MenuItemIngredient[] @relation("IngredientMenuItems")
+  customizationIngredients MenuItemCustomizationIngredient[]
+  createdAt DateTime    @default(now())
+  updatedAt DateTime    @updatedAt
+
+  @@unique([storeId, name])
+  @@index([brandId, storeId])
+}
+
+model Inventory {
+  id           String      @id @default(cuid())
+  brandId      String
+  brand        Brand       @relation(fields: [brandId], references: [id], onDelete: Cascade)
+  storeId      String?
+  store        Store?      @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  ingredientId String
+  ingredient   Ingredient  @relation("IngredientInventories", fields: [ingredientId], references: [id], onDelete: Cascade)
+  quantity     Int         @default(0)
+  createdAt    DateTime    @default(now())
+  updatedAt    DateTime    @updatedAt
+
+  @@unique([storeId, ingredientId])
+  @@index([brandId, storeId])
+}
+
+model MenuItem {
+  id          String               @id @default(cuid())
+  brandId     String
+  brand       Brand                @relation(fields: [brandId], references: [id], onDelete: Cascade)
+  storeId     String?
+  store       Store?               @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  name        String
+  price       Int
+  dailyLimit  Int
+  prepMinutes Int
+  imageUrl    String?
+  /// 商品的分類標籤（例如：甜點、強烈推薦）
+categories  String[] @default([])
+  isActive    Boolean              @default(true)
+  recipeLines MenuItemIngredient[]
+  /// 可選的客製化項目（例如：加珍珠 +10 元，最多 2 份）
+  customizations MenuItemCustomization[]
+  createdAt   DateTime             @default(now())
+  updatedAt   DateTime             @updatedAt
+
+  @@index([brandId, storeId, createdAt])
+}
+
+model MenuItemIngredient {
+  id           String     @id @default(cuid())
+  menuItemId   String
+  menuItem     MenuItem   @relation(fields: [menuItemId], references: [id], onDelete: Cascade)
+  ingredientId String
+  ingredient   Ingredient @relation("IngredientMenuItems", fields: [ingredientId], references: [id], onDelete: Cascade)
+  quantity     Int
+}
+
+model MenuItemCustomization {
+  id          String   @id @default(cuid())
+  menuItemId  String
+  menuItem    MenuItem @relation(fields: [menuItemId], references: [id], onDelete: Cascade)
+  /// 客製化項目名稱（例如：加珍珠、額外醬料）
+  label       String
+  /// 此客製化項目每一單位加收的價格（可以是 0）
+  priceDelta  Int
+  /// 單一商品這個客製化項目允許選擇的最大數量（例如最多 3 份）
+  maxQuantity Int
+
+  /// 每一單位此客製化額外消耗的原料（例如：加一份卡士達餡）
+  extraRecipeLines MenuItemCustomizationIngredient[]
+}
+
+model MenuItemCustomizationIngredient {
+  id               String                 @id @default(cuid())
+  customizationId  String
+  customization    MenuItemCustomization  @relation(fields: [customizationId], references: [id], onDelete: Cascade)
+  ingredientId     String
+  ingredient       Ingredient             @relation(fields: [ingredientId], references: [id])
+  quantity         Int
+}
+
+model Order {
+  id        String   @id @default(cuid())
+  brandId   String
+  brand     Brand    @relation(fields: [brandId], references: [id], onDelete: Cascade)
+  storeId   String
+  store     Store    @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  /// 給人看的訂單編號（例如：ORD-20260310-0001）
+  displayId String
+  /// 訂單總金額（元）
+  total     Int
+  /// 付款狀態
+  paymentStatus PaymentStatus @default(UNPAID)
+  /// 訂單製作流程狀態
+  status    OrderStatus @default(QUEUED)
+  /// 給客人看的「固定」起始預估完成時間（當訂單進入 QUEUED 時封存）
+  customerEta DateTime?
+  /// 進入「製作中」的時間（用來計算 ETA）
+  startedAt DateTime?
+  /// 進入「待取貨」的時間（可選：用來做實際 vs 預估比較）
+  readyAt   DateTime?
+  placedAt  DateTime @default(now())
+  createdAt DateTime @default(now())
+
+  items     OrderItem[]
+
+  @@unique([storeId, displayId])
+  @@index([brandId, storeId, placedAt])
+}
+
+model OrderItem {
+  id        String   @id @default(cuid())
+  orderId   String
+  order     Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  menuItemId String
+  /// 下單當下的商品快照（避免日後菜單改名/改價影響歷史訂單）
+  name      String
+  imageUrl  String?
+  unitPrice Int
+  /// 下單當下的製作時間快照（分鐘/份），避免日後菜單調整影響歷史訂單 ETA
+  prepMinutes Int @default(0)
+  quantity  Int
+  createdAt DateTime @default(now())
+
+  customizations OrderItemCustomization[]
+
+  @@index([orderId])
+  @@index([menuItemId])
+}
+
+model OrderItemCustomization {
+  id          String   @id @default(cuid())
+  orderItemId String
+  orderItem   OrderItem @relation(fields: [orderItemId], references: [id], onDelete: Cascade)
+  /// 下單當下的客製化快照
+  label       String
+  priceDelta  Int
+  quantity    Int
+  createdAt   DateTime @default(now())
+
+  @@index([orderItemId])
+}
+
+/// 每家店每天的訂單流水號（用交易 upsert 保證不重複）
+model OrderCounter {
+  id        String   @id @default(cuid())
+  storeId   String
+  store     Store    @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  /// 日期（以當地時區在應用層算出，存成 00:00:00 的 DateTime）
+  date      DateTime
+  seq       Int      @default(0)
+  updatedAt DateTime @updatedAt
+
+  @@unique([storeId, date])
+  @@index([storeId, date])
+}
+
+// NextAuth.js required models
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String? @db.Text
+  access_token      String? @db.Text
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String? @db.Text
+  session_state     String?
+  user              User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+}
