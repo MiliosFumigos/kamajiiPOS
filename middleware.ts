@@ -1,11 +1,51 @@
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
-import { getSubdomainFromHost, isRootDomain } from "@/lib/subdomain";
 
 // Routes that require brand subdomain (app backend, storefront)
 const BRAND_ROUTES = ["/app", "/menu", "/cart", "/kiosk"];
 // Auth routes on root domain
 const AUTH_ROUTES = ["/login", "/register"];
+
+/**
+ * Edge Runtime: inline helpers to avoid unsupported-module bundling.
+ * (Same logic as `lib/subdomain.ts`)
+ */
+function getSubdomainFromHost(host: string): string | null {
+  // Remove port
+  const hostname = host.split(":")[0];
+
+  // localhost or 127.0.0.1 - for local dev, first part before .localhost is subdomain
+  if (hostname === "localhost" || hostname === "127.0.0.1") {
+    return null;
+  }
+
+  if (hostname.endsWith(".localhost")) {
+    const parts = hostname.split(".");
+    if (parts.length >= 2) {
+      return parts[0];
+    }
+  }
+
+  // Local dev A 方案：*.lvh.me
+  if (hostname.endsWith(".lvh.me")) {
+    const parts = hostname.split(".");
+    if (parts.length >= 3) {
+      return parts[0];
+    }
+  }
+
+  // Production: subdomain.example.com
+  const parts = hostname.split(".");
+  if (parts.length >= 3) {
+    return parts[0];
+  }
+
+  return null;
+}
+
+function isRootDomain(host: string): boolean {
+  return getSubdomainFromHost(host) === null;
+}
 
 function isBrandRoute(pathname: string): boolean {
   return BRAND_ROUTES.some((route) => pathname.startsWith(route));
