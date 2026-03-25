@@ -50,12 +50,13 @@ export function middleware(request: NextRequest) {
     const url = new URL(request.url);
     url.pathname = targetPath;
 
-    const requestHeaders = new Headers(request.headers);
-    requestHeaders.set(HEADER_BRAND, brand);
+    // Recreate Headers to make sure the instance is correctly forwarded.
+    const forwardedHeaders = new Headers(request.headers);
+    forwardedHeaders.set(HEADER_BRAND, brand);
 
     return NextResponse.rewrite(url, {
       request: {
-        headers: requestHeaders,
+        headers: forwardedHeaders,
       },
     });
   } catch {
@@ -66,18 +67,8 @@ export function middleware(request: NextRequest) {
 
 export const config = {
   matcher: [
-    // Path-based brand routes
-    "/:brand/app",
-    "/:brand/app/:path*",
-    "/:brand/menu",
-    "/:brand/menu/:path*",
-    "/:brand/cart",
-    "/:brand/cart/:path*",
-    "/:brand/kiosk",
-    "/:brand/kiosk/:path*",
-    "/:brand/login",
-    "/:brand/login/:path*",
-    "/:brand/register",
-    "/:brand/register/:path*",
+    // Run middleware for tenant pages, but NEVER for Next.js/API paths.
+    // Important: avoid accidentally matching `/api/menu` as `/:brand/menu`.
+    "/((?!api|_next/static|_next/image|favicon.ico).*)",
   ],
 };

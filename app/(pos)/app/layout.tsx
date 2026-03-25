@@ -11,10 +11,19 @@ export default async function AppLayout({
 }: {
   children: React.ReactNode;
 }) {
-  const [session, brand] = await Promise.all([
-    getServerSession(authOptions),
-    getBrandFromSubdomain(),
-  ]);
+  const session = await getServerSession(authOptions);
+  const brandFromHeader = await getBrandFromSubdomain();
+
+  // If middleware/header didn't provide `x-brand-subdomain` (e.g. user lands on `/app/*`
+  // without a `/<brand>/` prefix), fall back to session.user.brandId to keep the app working.
+  // For POS dashboard pages, `session.user.brandId` should be the source of truth.
+  // This avoids any mismatch between URL brand and header parsing.
+  const brand =
+    session?.user?.brandId
+      ? await prisma.brand.findUnique({
+          where: { id: session.user.brandId },
+        })
+      : brandFromHeader;
 
   if (!session) {
     if (brand) {
