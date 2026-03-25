@@ -134,16 +134,30 @@ export const authOptions: NextAuthOptions = {
             ? String(credentials.subdomain)
             : null;
 
-        const where = {
+        const baseWhere = {
           email: credentials.email,
           role: { in: [Role.OWNER, Role.MANAGER, Role.STAFF] },
-          ...(subdomain && { brand: { subdomain } }),
         };
 
-        const user = await prisma.user.findFirst({
-          where,
+        // Path-based 多租戶下，URL 的 brand 片段可能跟 DB 的 brand.subdomain
+        // 不完全一致（例如字串規則/使用者輸入差異）。
+        // 這會導致查不到 user 直接 401。為了讓「註冊後登入」穩定，
+        // 先用 subdomain 查；找不到時回退只用 email 查。
+        const whereWithSubdomain = subdomain
+          ? { ...baseWhere, brand: { subdomain } }
+          : baseWhere;
+
+        let user = await prisma.user.findFirst({
+          where: whereWithSubdomain,
           include: { brand: true },
         });
+
+        if (!user && subdomain) {
+          user = await prisma.user.findFirst({
+            where: baseWhere,
+            include: { brand: true },
+          });
+        }
 
         if (!user || !user.password) {
           throw new Error("找不到使用者或密碼錯誤");

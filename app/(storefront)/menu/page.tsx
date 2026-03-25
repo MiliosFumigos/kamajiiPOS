@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 import { ProductCard } from "@/components/storefront/ProductCard";
 import { Button } from "@/components/ui/Button";
 
@@ -16,6 +17,8 @@ const DEMO_MENU = [
 
 export default function MenuPage() {
   const [cart, setCart] = useState<Record<string, number>>({});
+  const pathname = usePathname();
+  const brand = pathname.split("/").filter(Boolean)[0] ?? "";
 
   const addToCart = (id: string) => {
     setCart((prev) => ({
@@ -30,7 +33,7 @@ export default function MenuPage() {
     <main className="container mx-auto px-6 py-8">
       <div className="mb-6 flex items-center justify-between">
         <h2 className="text-2xl font-bold text-slate-900">菜單</h2>
-        <Link href="/cart">
+        <Link href={brand ? `/${brand}/cart` : "/cart"}>
           <Button>
             購物車 {totalItems > 0 && `(${totalItems})`}
           </Button>

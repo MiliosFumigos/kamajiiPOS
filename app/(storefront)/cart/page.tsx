@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 import { CartItem } from "@/components/storefront/CartItem";
 import { Button } from "@/components/ui/Button";
 
@@ -15,6 +16,8 @@ export default function CartPage() {
   const [items, setItems] = useState(
     Object.fromEntries(DEMO_ITEMS.map((i) => [i.id, 2]))
   );
+  const pathname = usePathname();
+  const brand = pathname.split("/").filter(Boolean)[0] ?? "";
 
   const handleQuantityChange = (id: string, delta: number) => {
     setItems((prev) => {
@@ -37,7 +40,7 @@ export default function CartPage() {
     <main className="container mx-auto max-w-2xl px-6 py-8">
       <div className="mb-6 flex items-center justify-between">
         <h2 className="text-2xl font-bold text-slate-900">購物車</h2>
-        <Link href="/menu">
+        <Link href={brand ? `/${brand}/menu` : "/menu"}>
           <Button variant="outline">繼續點餐</Button>
         </Link>
       </div>

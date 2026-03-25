@@ -8,29 +8,11 @@ import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { Card } from "@/components/ui/Card";
 
-/** 依品牌 subdomain 組出 app dashboard 網址（登入後跳轉用） */
-function getDashboardUrlForBrand(brandSubdomain: string): string {
-  if (typeof window === "undefined") return "/app/dashboard";
-  const { protocol, hostname, port } = window.location;
-  if (hostname === "localhost" || hostname === "127.0.0.1") {
-    return `${protocol}//${brandSubdomain}.localhost:${port || "3000"}/app/dashboard`;
-  }
-  if (hostname === "lvh.me") {
-    return `${protocol}//${brandSubdomain}.lvh.me${port ? `:${port}` : ""}/app/dashboard`;
-  }
-  const parts = hostname.split(".");
-  const baseDomain = parts.length >= 2 ? parts.slice(-2).join(".") : hostname;
-  return `${protocol}//${brandSubdomain}.${baseDomain}${port ? `:${port}` : ""}/app/dashboard`;
-}
-
-function getSubdomain(): string | null {
+/** 從路徑 /<brand>/... 取得品牌代號（path-based 多租戶） */
+function getBrandFromPath(): string | null {
   if (typeof window === "undefined") return null;
-  const host = window.location.hostname;
-  if (host === "localhost" || host === "127.0.0.1") return null;
-  if (host.endsWith(".localhost")) return host.split(".")[0] || null;
-  if (host.endsWith(".lvh.me")) return host.split(".")[0] || null;
-  const parts = host.split(".");
-  return parts.length >= 3 ? parts[0] : null;
+  const parts = window.location.pathname.split("/").filter(Boolean);
+  return parts.length >= 1 ? parts[0] : null;
 }
 
 function LoginForm() {
@@ -44,7 +26,7 @@ function LoginForm() {
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
-    setSubdomain(getSubdomain());
+    setSubdomain(getBrandFromPath());
   }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -69,24 +51,9 @@ function LoginForm() {
       // 若有品牌 subdomain，導向該品牌的 app dashboard（避免根網域受品牌路由限制）
       const session = await getSession();
       if (session?.user?.brandSubdomain) {
-        if (typeof window !== "undefined") {
-          const host = window.location.hostname;
-      
-          // 已經在子網域（例如 brandtest001.localhost 或 brandtest001.kamajii.com）
-          const isSubdomainLocalhost =
-            host.endsWith(".localhost") && host.split(".").length >= 2;
-      
-          if (isSubdomainLocalhost) {
-            // 子網域自己登入：直接走當前 host 的 /app/dashboard，不再重組 host
-            router.push("/app/dashboard");
-            router.refresh();
-            return;
-          }
-      
-          // 其餘情況（主網域登入）：依 brandSubdomain 組出子網域 URL
-          window.location.href = getDashboardUrlForBrand(session.user.brandSubdomain);
-          return;
-        }
+        router.push(`/${session.user.brandSubdomain}/app/dashboard`);
+        router.refresh();
+        return;
       }
 
       router.push(callbackUrl);
@@ -128,7 +95,10 @@ function LoginForm() {
           </Button>
           <p className="text-center text-sm text-slate-600">
             還沒有帳號？{" "}
-            <Link href="/register" className="font-medium text-brand-600 hover:underline">
+            <Link
+              href={subdomain ? `/${subdomain}/register` : "/register"}
+              className="font-medium text-brand-600 hover:underline"
+            >
               立即註冊
             </Link>
           </p>

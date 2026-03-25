@@ -17,6 +17,11 @@ export default async function AppLayout({
   ]);
 
   if (!session) {
+    if (brand) {
+      redirect(
+        `/${brand.subdomain}/login?callbackUrl=/${brand.subdomain}/app/dashboard`
+      );
+    }
     redirect("/login?callbackUrl=/app/dashboard");
   }
 
@@ -59,6 +64,7 @@ export default async function AppLayout({
     <div className="flex h-screen">
       <Sidebar
         brandName={brand.name}
+        brandSubdomain={brand.subdomain}
         userRole={session.user.role}
         userName={session.user.name ?? null}
         storeName={storeName}

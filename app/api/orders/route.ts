@@ -2,7 +2,6 @@ import { NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import { getSubdomainFromHost } from "@/lib/subdomain";
 import { Role } from "@/lib/types";
 
 type CreateOrderBody = {
@@ -152,28 +151,18 @@ async function resolveBrandAndStore(request: Request): Promise<{
     return { brandId, storeId: store.id };
   }
 
-  // Kiosk（免登入）：依 host 子網域找品牌，預設使用品牌第一家店
-  const host = request.headers.get("host") || "";
-  const subdomain = getSubdomainFromHost(host);
-  if (!subdomain) throw new Error("Missing brand subdomain");
-
-  const brand = await prisma.brand.findUnique({
-    where: { subdomain },
-    select: { id: true },
-  });
-  if (!brand) throw new Error("Brand not found");
-
+  // Kiosk（免登入）：path-based 多租戶下，依 storeId 解析 brand/store
   const { searchParams } = new URL(request.url);
   const storeId = searchParams.get("storeId")?.trim();
   if (!storeId) throw new Error("Missing storeId");
 
-  const store = await prisma.store.findFirst({
-    where: { id: storeId, brandId: brand.id },
-    select: { id: true },
+  const store = await prisma.store.findUnique({
+    where: { id: storeId },
+    select: { id: true, brandId: true },
   });
   if (!store) throw new Error("Store not found");
 
-  return { brandId: brand.id, storeId: store.id };
+  return { brandId: store.brandId, storeId: store.id };
 }
 
 /**

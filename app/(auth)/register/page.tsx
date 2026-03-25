@@ -29,6 +29,7 @@ export default function RegisterPage() {
       });
 
       const data = await res.json();
+      const brandSubdomain: string | null = data.brand?.subdomain ?? null;
 
       if (!res.ok) {
         setError(data.error || "註冊失敗");
@@ -40,6 +41,7 @@ export default function RegisterPage() {
       const result = await signIn("credentials", {
         email,
         password,
+        subdomain: brandSubdomain || undefined,
         redirect: false,
       });
 
@@ -50,22 +52,10 @@ export default function RegisterPage() {
         return;
       }
 
-      // 導向該品牌的 app dashboard（需使用子網域）
-      const subdomain = data.brand?.subdomain;
-      if (subdomain) {
-        const { protocol, hostname, port } = window.location;
-        const isLocalhostRoot = hostname === "localhost" || hostname === "127.0.0.1";
-        const isLocalhostSub = hostname.endsWith(".localhost");
-        const isLvhRoot = hostname === "lvh.me";
-        const isLvhSub = hostname.endsWith(".lvh.me");
-
-        const baseUrl =
-          isLocalhostRoot || isLocalhostSub
-            ? `${protocol}//${subdomain}.localhost:${port || "3000"}`
-            : isLvhRoot || isLvhSub
-              ? `${protocol}//${subdomain}.lvh.me${port ? `:${port}` : ""}`
-              : `${protocol}//${subdomain}.${hostname.split(".").slice(-2).join(".")}${port ? `:${port}` : ""}`;
-        window.location.href = `${baseUrl}/app/dashboard`;
+      // 導向該品牌的 app dashboard（path-based 多租戶）
+      if (brandSubdomain) {
+        router.push(`/${brandSubdomain}/app/dashboard`);
+        router.refresh();
       } else {
         router.push("/app/dashboard");
       }

@@ -1,109 +1,63 @@
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 
-// Routes that require brand subdomain (app backend, storefront)
-const BRAND_ROUTES = ["/app", "/menu", "/cart", "/kiosk"];
-// Auth routes on root domain
-const AUTH_ROUTES = ["/login", "/register"];
+// Path-based multi-tenant middleware:
+// - User visits: /<brand>/app/dashboard
+// - We rewrite internally to: /app/dashboard
+// - And we pass brand via header `x-brand-subdomain` (keeps existing brand-context logic).
+const HEADER_BRAND = "x-brand-subdomain";
 
-/**
- * Edge Runtime: inline helpers to avoid unsupported-module bundling.
- * (Same logic as `lib/subdomain.ts`)
- */
-function getSubdomainFromHost(host: string): string | null {
-  // Remove port
-  const hostname = host.split(":")[0];
-
-  // localhost or 127.0.0.1 - for local dev, first part before .localhost is subdomain
-  if (hostname === "localhost" || hostname === "127.0.0.1") {
-    return null;
-  }
-
-  if (hostname.endsWith(".localhost")) {
-    const parts = hostname.split(".");
-    if (parts.length >= 2) {
-      return parts[0];
-    }
-  }
-
-  // Local dev A 方案：*.lvh.me
-  if (hostname.endsWith(".lvh.me")) {
-    const parts = hostname.split(".");
-    if (parts.length >= 3) {
-      return parts[0];
-    }
-  }
-
-  // Production: subdomain.example.com
-  const parts = hostname.split(".");
-  if (parts.length >= 3) {
-    return parts[0];
-  }
-
-  return null;
+function getBrandAndRouteFromPath(pathname: string):
+  | { brand: string; base: string; rest: string[] }
+  | null {
+  const parts = pathname.split("/").filter(Boolean);
+  if (parts.length < 2) return null;
+  const [brand, base, ...rest] = parts;
+  return { brand, base, rest };
 }
 
-function isRootDomain(host: string): boolean {
-  return getSubdomainFromHost(host) === null;
-}
-
-function isBrandRoute(pathname: string): boolean {
-  return BRAND_ROUTES.some((route) => pathname.startsWith(route));
-}
-
-function isAuthRoute(pathname: string): boolean {
-  return AUTH_ROUTES.some((route) => pathname === route || pathname.startsWith(route + "/"));
+function rewriteTargetForBase(base: string, rest: string[]): string | null {
+  switch (base) {
+    case "app":
+      if (rest.length === 0) return "/app/dashboard";
+      return `/app/${rest.join("/")}`;
+    case "menu":
+      return rest.length === 0 ? "/menu" : `/menu/${rest.join("/")}`;
+    case "cart":
+      return rest.length === 0 ? "/cart" : `/cart/${rest.join("/")}`;
+    case "kiosk":
+      return rest.length === 0 ? "/kiosk" : `/kiosk/${rest.join("/")}`;
+    case "login":
+      return "/login";
+    case "register":
+      return "/register";
+    default:
+      return null;
+  }
 }
 
 export function middleware(request: NextRequest) {
   try {
-    const host = request.headers.get("host") || "";
     const pathname = request.nextUrl.pathname;
 
-    // For local dev: use acme.localhost:3000 format
-    // For production: use acme.yourapp.com
-    const subdomain = getSubdomainFromHost(host);
-    const onRootDomain = isRootDomain(host);
+    const parsed = getBrandAndRouteFromPath(pathname);
+    if (!parsed) return NextResponse.next();
 
-    // Brand routes (dashboard, storefront) require subdomain
-    if (isBrandRoute(pathname)) {
-      if (onRootDomain) {
-        // Redirect to root with message - or show landing
-        // Use request.url (Edge-compatible) to avoid origin-related runtime differences.
-        if (!request.url) return NextResponse.next();
-        return NextResponse.redirect(new URL("/", request.url));
-      }
+    const { brand, base, rest } = parsed;
+    const targetPath = rewriteTargetForBase(base, rest);
+    if (!targetPath) return NextResponse.next();
 
-      if (subdomain) {
-        // Pass subdomain to downstream via header (layout will lookup brand)
-        const requestHeaders = new Headers(request.headers);
-        requestHeaders.set("x-brand-subdomain", subdomain);
+    const url = new URL(request.url);
+    url.pathname = targetPath;
 
-        return NextResponse.next({
-          request: {
-            headers: requestHeaders,
-          },
-        });
-      }
-    }
+    const requestHeaders = new Headers(request.headers);
+    requestHeaders.set(HEADER_BRAND, brand);
 
-    // Auth routes - allow both root and subdomain
-    if (isAuthRoute(pathname)) {
-      if (subdomain) {
-        const requestHeaders = new Headers(request.headers);
-        requestHeaders.set("x-brand-subdomain", subdomain);
-        return NextResponse.next({
-          request: { headers: requestHeaders },
-        });
-      }
-    }
-
-    // NextAuth API routes
-    if (pathname.startsWith("/api/auth")) {
-      return NextResponse.next();
-    }
-
-    return NextResponse.next();
+    return NextResponse.rewrite(url, {
+      request: {
+        headers: requestHeaders,
+      },
+    });
   } catch {
     // Never let middleware crash the whole app.
     return NextResponse.next();
@@ -112,16 +66,18 @@ export function middleware(request: NextRequest) {
 
 export const config = {
   matcher: [
-    // Keep middleware scope small to reduce Edge invocation risk.
-    // Brand routes
-    "/app/:path*",
-    "/menu/:path*",
-    "/cart/:path*",
-    "/kiosk/:path*",
-    // Auth routes
-    "/login/:path*",
-    "/register/:path*",
-    // NextAuth API routes
-    "/api/auth/:path*",
+    // Path-based brand routes
+    "/:brand/app",
+    "/:brand/app/:path*",
+    "/:brand/menu",
+    "/:brand/menu/:path*",
+    "/:brand/cart",
+    "/:brand/cart/:path*",
+    "/:brand/kiosk",
+    "/:brand/kiosk/:path*",
+    "/:brand/login",
+    "/:brand/login/:path*",
+    "/:brand/register",
+    "/:brand/register/:path*",
   ],
 };

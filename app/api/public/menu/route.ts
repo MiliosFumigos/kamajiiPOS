@@ -1,6 +1,5 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { getSubdomainFromHost } from "@/lib/subdomain";
 
 function mapMenuItems(items: {
   id: string;
@@ -49,23 +48,6 @@ function mapMenuItems(items: {
  * GET /api/public/menu
  */
 export async function GET(request: Request) {
-  const host = request.headers.get("host") || "";
-  const subdomain = getSubdomainFromHost(host);
-  if (!subdomain) {
-    return NextResponse.json(
-      { error: "請使用品牌子網域存取" },
-      { status: 400 }
-    );
-  }
-
-  const brand = await prisma.brand.findUnique({
-    where: { subdomain },
-    select: { id: true },
-  });
-  if (!brand) {
-    return NextResponse.json({ error: "找不到該品牌" }, { status: 404 });
-  }
-
   const { searchParams } = new URL(request.url);
   const storeId = searchParams.get("storeId")?.trim();
   if (!storeId) {
@@ -75,17 +57,16 @@ export async function GET(request: Request) {
     );
   }
 
-  const store = await prisma.store.findFirst({
-    where: { id: storeId, brandId: brand.id },
-    select: { id: true },
+  // path-based 多租戶時，api 不可靠 host/subdomain，改用 storeId 直接查出品牌
+  const store = await prisma.store.findUnique({
+    where: { id: storeId },
+    select: { id: true, brandId: true },
   });
-  if (!store) {
-    return NextResponse.json({ error: "找不到該分店" }, { status: 404 });
-  }
+  if (!store) return NextResponse.json({ error: "找不到該分店" }, { status: 404 });
 
   const items = await prisma.menuItem.findMany({
     where: {
-      brandId: brand.id,
+      brandId: store.brandId,
       storeId: store.id,
       isActive: true,
     },

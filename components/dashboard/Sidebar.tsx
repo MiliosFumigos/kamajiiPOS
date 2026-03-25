@@ -6,6 +6,7 @@ import { signOut } from "next-auth/react";
 
 interface SidebarProps {
   brandName: string;
+  brandSubdomain: string;
   userRole: string;
   userName?: string | null;
   storeName?: string | null;
@@ -18,23 +19,31 @@ const roleLabels: Record<string, string> = {
   CUSTOMER: "顧客",
 };
 
-export function Sidebar({ brandName, userRole, userName, storeName }: SidebarProps) {
+export function Sidebar({
+  brandName,
+  brandSubdomain,
+  userRole,
+  userName,
+  storeName,
+}: SidebarProps) {
   const pathname = usePathname();
 
   const links =
     userRole === "OWNER"
       ? [
-          { href: "/app/dashboard", label: "總覽" },
-          { href: "/app/staff", label: "員工" },
+          { href: `/${brandSubdomain}/app/dashboard`, label: "總覽" },
+          { href: `/${brandSubdomain}/app/staff`, label: "員工" },
         ]
       : [
-          { href: "/app/dashboard", label: "總覽" },
-          { href: "/app/order", label: "點餐" },
-          { href: "/app/menu", label: "菜單管理" },
-          { href: "/app/inventory", label: "庫存管理" },
-          { href: "/app/orders", label: "訂單" },
-          { href: "/app/kds", label: "KDS（廚房）" },
-          ...(userRole === "MANAGER" ? [{ href: "/app/staff", label: "員工" }] : []),
+          { href: `/${brandSubdomain}/app/dashboard`, label: "總覽" },
+          { href: `/${brandSubdomain}/app/order`, label: "點餐" },
+          { href: `/${brandSubdomain}/app/menu`, label: "菜單管理" },
+          { href: `/${brandSubdomain}/app/inventory`, label: "庫存管理" },
+          { href: `/${brandSubdomain}/app/orders`, label: "訂單" },
+          { href: `/${brandSubdomain}/app/kds`, label: "KDS（廚房）" },
+          ...(userRole === "MANAGER"
+            ? [{ href: `/${brandSubdomain}/app/staff`, label: "員工" }]
+            : []),
         ];
 
   return (

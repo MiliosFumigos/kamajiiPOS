@@ -57,7 +57,9 @@ export default async function AppDashboardPage() {
 
   const host = headers().get("host") || "localhost:3000";
   const proto = headers().get("x-forwarded-proto") ?? "http";
-  const kioskUrl = `${proto}://${host}/kiosk?storeId=${encodeURIComponent(store.id)}`;
+  const brandSlug = currentUser.brandSubdomain;
+  const kioskPath = brandSlug ? `/${brandSlug}/kiosk` : "/kiosk";
+  const kioskUrl = `${proto}://${host}${kioskPath}?storeId=${encodeURIComponent(store.id)}`;
 
   const qrDataUrl = await QRCode.toDataURL(kioskUrl, {
     width: 180,
