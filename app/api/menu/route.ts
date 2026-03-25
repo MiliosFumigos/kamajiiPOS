@@ -345,6 +345,17 @@ export async function DELETE(request: Request) {
           quantity: true,
         },
       },
+      customizations: {
+        select: {
+          id: true,
+          label: true,
+          priceDelta: true,
+          maxQuantity: true,
+          extraRecipeLines: {
+            select: { ingredientId: true, quantity: true },
+          },
+        },
+      },
     },
     orderBy: { createdAt: "asc" },
   });

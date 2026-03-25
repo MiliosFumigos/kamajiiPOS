@@ -319,7 +319,7 @@ export async function POST(request: Request) {
 
       // 5) 扣庫存（條件式 updateMany，避免扣到負數）
       const insufficient: { ingredientId: string; needed: number }[] = [];
-      for (const [ingredientId, needed] of requiredByIngredient.entries()) {
+      for (const [ingredientId, needed] of Array.from(requiredByIngredient.entries())) {
         if (needed <= 0) continue;
         const updated = await tx.inventory.updateMany({
           where: {
@@ -336,7 +336,7 @@ export async function POST(request: Request) {
       }
       if (insufficient.length > 0) {
         // 把已扣的補回去（同一個 transaction 內）
-        for (const [ingredientId, needed] of requiredByIngredient.entries()) {
+        for (const [ingredientId, needed] of Array.from(requiredByIngredient.entries())) {
           if (needed <= 0) continue;
           await tx.inventory.updateMany({
             where: { brandId, storeId, ingredientId },

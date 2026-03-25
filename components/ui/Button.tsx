@@ -2,7 +2,7 @@ import { ButtonHTMLAttributes } from "react";
 
 interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
   variant?: "default" | "outline" | "ghost";
-  size?: "default" | "sm" | "lg";
+  size?: "default" | "xs" | "sm" | "lg";
 }
 
 export function Button({
@@ -20,6 +20,7 @@ export function Button({
   };
   const sizes = {
     default: "h-10 px-4 py-2",
+    xs: "h-7 px-2.5 text-xs",
     sm: "h-8 px-3 text-sm",
     lg: "h-12 px-6 text-lg",
   };

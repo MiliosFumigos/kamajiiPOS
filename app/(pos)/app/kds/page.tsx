@@ -154,7 +154,7 @@ export default function AppKdsPage() {
         baselineRef.current = nextQueuedIds;
       } else {
         const newQueued: string[] = [];
-        for (const id of nextQueuedIds) {
+        for (const id of Array.from(nextQueuedIds)) {
           if (!prevIds.has(id)) newQueued.push(id);
         }
         baselineRef.current = nextQueuedIds;
