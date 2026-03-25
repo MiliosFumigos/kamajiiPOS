@@ -55,52 +55,57 @@ function isAuthRoute(pathname: string): boolean {
   return AUTH_ROUTES.some((route) => pathname === route || pathname.startsWith(route + "/"));
 }
 
-export async function middleware(request: NextRequest) {
-  const host = request.headers.get("host") || "";
-  const pathname = request.nextUrl.pathname;
+export function middleware(request: NextRequest) {
+  try {
+    const host = request.headers.get("host") || "";
+    const pathname = request.nextUrl.pathname;
 
-  // For local dev: use acme.localhost:3000 format
-  // For production: use acme.yourapp.com
-  const subdomain = getSubdomainFromHost(host);
-  const onRootDomain = isRootDomain(host);
+    // For local dev: use acme.localhost:3000 format
+    // For production: use acme.yourapp.com
+    const subdomain = getSubdomainFromHost(host);
+    const onRootDomain = isRootDomain(host);
 
-  // Brand routes (dashboard, storefront) require subdomain
-  if (isBrandRoute(pathname)) {
-    if (onRootDomain) {
-      // Redirect to root with message - or show landing
-      return NextResponse.redirect(new URL("/", request.url));
+    // Brand routes (dashboard, storefront) require subdomain
+    if (isBrandRoute(pathname)) {
+      if (onRootDomain) {
+        // Redirect to root with message - or show landing
+        return NextResponse.redirect(request.nextUrl.origin + "/");
+      }
+
+      if (subdomain) {
+        // Pass subdomain to downstream via header (layout will lookup brand)
+        const requestHeaders = new Headers(request.headers);
+        requestHeaders.set("x-brand-subdomain", subdomain);
+
+        return NextResponse.next({
+          request: {
+            headers: requestHeaders,
+          },
+        });
+      }
     }
 
-    if (subdomain) {
-      // Pass subdomain to downstream via header (layout will lookup brand)
-      const requestHeaders = new Headers(request.headers);
-      requestHeaders.set("x-brand-subdomain", subdomain);
-
-      return NextResponse.next({
-        request: {
-          headers: requestHeaders,
-        },
-      });
+    // Auth routes - allow both root and subdomain
+    if (isAuthRoute(pathname)) {
+      if (subdomain) {
+        const requestHeaders = new Headers(request.headers);
+        requestHeaders.set("x-brand-subdomain", subdomain);
+        return NextResponse.next({
+          request: { headers: requestHeaders },
+        });
+      }
     }
-  }
 
-  // Auth routes - allow both root and subdomain
-  if (isAuthRoute(pathname)) {
-    if (subdomain) {
-      const requestHeaders = new Headers(request.headers);
-      requestHeaders.set("x-brand-subdomain", subdomain);
-      return NextResponse.next({
-        request: { headers: requestHeaders },
-      });
+    // NextAuth API routes
+    if (pathname.startsWith("/api/auth")) {
+      return NextResponse.next();
     }
-  }
 
-  // NextAuth API routes
-  if (pathname.startsWith("/api/auth")) {
+    return NextResponse.next();
+  } catch {
+    // Never let middleware crash the whole app.
     return NextResponse.next();
   }
-
-  return NextResponse.next();
 }
 
 export const config = {
