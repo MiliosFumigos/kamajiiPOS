@@ -69,7 +69,9 @@ export function middleware(request: NextRequest) {
     if (isBrandRoute(pathname)) {
       if (onRootDomain) {
         // Redirect to root with message - or show landing
-        return NextResponse.redirect(request.nextUrl.origin + "/");
+        // Use request.url (Edge-compatible) to avoid origin-related runtime differences.
+        if (!request.url) return NextResponse.next();
+        return NextResponse.redirect(new URL("/", request.url));
       }
 
       if (subdomain) {
@@ -110,13 +112,16 @@ export function middleware(request: NextRequest) {
 
 export const config = {
   matcher: [
-    /*
-     * Match all request paths except:
-     * - _next/static (static files)
-     * - _next/image (image optimization files)
-     * - favicon.ico
-     * - public folder
-     */
-    "/((?!_next/static|_next/image|favicon.ico|images|.*\\.png$|.*\\.jpg$).*)",
+    // Keep middleware scope small to reduce Edge invocation risk.
+    // Brand routes
+    "/app/:path*",
+    "/menu/:path*",
+    "/cart/:path*",
+    "/kiosk/:path*",
+    // Auth routes
+    "/login/:path*",
+    "/register/:path*",
+    // NextAuth API routes
+    "/api/auth/:path*",
   ],
 };
