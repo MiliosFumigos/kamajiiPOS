@@ -45,7 +45,7 @@ export default function LandingPage() {
         <section className="grid gap-8 py-20 md:grid-cols-3">
           <div className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
             <h3 className="text-lg font-semibold text-slate-900">多品牌管理</h3>
-            <p className="mt-2 text-slate-600">子網域隔離，每品牌獨立後台</p>
+            <p className="mt-2 text-slate-600">子路徑隔離，每品牌獨立後台</p>
           </div>
           <div className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
             <h3 className="text-lg font-semibold text-slate-900">角色權限</h3>

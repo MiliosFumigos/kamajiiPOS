@@ -28,6 +28,14 @@ export default function InventoryPage() {
 
   const isManagerOrStaff = role === Role.MANAGER || role === Role.STAFF;
 
+  const createTempId = () => {
+    // 新增原料時用穩定的 key，避免 React remount 造成畫面高度抖動
+    if (typeof crypto !== "undefined" && "randomUUID" in crypto) {
+      return crypto.randomUUID();
+    }
+    return `temp-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+  };
+
   useEffect(() => {
     const load = async () => {
       setLoading(true);
@@ -97,6 +105,7 @@ export default function InventoryPage() {
     setRows((prev) => [
       ...prev,
       {
+        id: createTempId(),
         name: "",
         unit: "份",
         quantity: 0,
@@ -117,7 +126,9 @@ export default function InventoryPage() {
     });
   };
 
-  const [demandByIngredient, setDemandByIngredient] = useState<Record<string, number>>({});
+  const [demandByIngredient, setDemandByIngredient] = useState<
+    Record<string, number>
+  >({});
 
   useEffect(() => {
     const loadDemand = async () => {
@@ -150,7 +161,8 @@ export default function InventoryPage() {
           for (const r of item.recipe ?? []) {
             if (!r.ingredientId || !Number.isFinite(r.quantity)) continue;
             const qty = Math.max(0, Math.floor(r.quantity));
-            demand[r.ingredientId] = (demand[r.ingredientId] ?? 0) + qty * dailyLimit;
+            demand[r.ingredientId] =
+              (demand[r.ingredientId] ?? 0) + qty * dailyLimit;
           }
 
           for (const c of item.customizations ?? []) {
@@ -237,171 +249,232 @@ export default function InventoryPage() {
 
       {isManagerOrStaff && (
         <Card title="目前原料庫存總覽">
-          {loading ? (
-            <p className="text-sm text-slate-500">載入中...</p>
-          ) : (
-            <>
-              <div className="mb-3 flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
-                <p className="text-sm text-slate-600">
-                  在此新增、刪除或調整原料與庫存數量，按下「儲存變更」後，菜單管理與點餐系統會共用這份資料。
-                </p>
-                <div className="flex gap-2">
-                  <Button variant="outline" size="sm" onClick={handleAddRow}>
-                    新增原料
-                  </Button>
-                  <Button
-                    size="sm"
-                    onClick={handleSave}
-                    disabled={!dirty || saving}
-                  >
-                    {saving ? "儲存中..." : "儲存變更"}
-                  </Button>
-                </div>
-              </div>
-              {error && (
-                <p className="mb-2 text-sm text-red-600">
-                  {error}
-                </p>
-              )}
-              <div className="overflow-x-auto">
-                <table className="min-w-full border border-slate-200 bg-white text-sm">
-                  <thead>
-                    <tr className="bg-slate-50">
-                      <th className="border-b border-slate-200 px-4 py-2 text-left font-medium text-slate-600">
-                        原料名稱
-                      </th>
-                      <th className="border-b border-slate-200 px-4 py-2 text-left font-medium text-slate-600">
-                        單位
-                      </th>
-                      <th className="border-b border-slate-200 px-4 py-2 text-left font-medium text-slate-600">
-                        目前庫存
-                      </th>
-                      <th className="border-b border-slate-200 px-4 py-2 text-left font-medium text-slate-600">
-                        菜單需求
-                      </th>
-                      <th className="border-b border-slate-200 px-4 py-2 text-left font-medium text-slate-600">
-                        操作
-                      </th>
+          <div className="mb-3 flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
+            <p className="text-sm text-slate-600">
+              在此新增、刪除或調整原料與庫存數量，按下「儲存變更」後，菜單管理與點餐系統會共用這份資料。
+            </p>
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleAddRow}
+                disabled={loading}
+              >
+                新增原料
+              </Button>
+              <Button
+                size="sm"
+                onClick={handleSave}
+                disabled={!dirty || saving || loading}
+              >
+                {saving ? "儲存中..." : "儲存變更"}
+              </Button>
+            </div>
+          </div>
+          {error && <p className="mb-2 text-sm text-red-600">{error}</p>}
+          <div className="overflow-x-auto">
+            {loading ? (
+              <table className="min-w-[820px] table-fixed border border-slate-200 bg-white text-xs sm:w-full sm:min-w-0 sm:text-sm">
+                <thead>
+                  <tr className="bg-slate-50">
+                    <th className="w-[220px] sm:w-[36%] border-b border-slate-200 px-4 py-2 text-left font-medium text-slate-600">
+                      原料名稱
+                    </th>
+                    <th className="w-[90px] sm:w-[12%] border-b border-slate-200 px-4 py-2 text-left font-medium text-slate-600">
+                      單位
+                    </th>
+                    <th className="w-[140px] sm:w-[16%] border-b border-slate-200 px-4 py-2 text-left font-medium text-slate-600">
+                      目前庫存
+                    </th>
+                    <th className="w-[240px] sm:w-[22%] border-b border-slate-200 px-4 py-2 text-left font-medium text-slate-600">
+                      菜單需求
+                    </th>
+                    <th className="w-[130px] sm:w-[14%] border-b border-slate-200 px-4 py-2 text-left font-medium text-slate-600">
+                      操作
+                    </th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {Array.from({ length: 6 }).map((_, i) => (
+                    <tr key={i} className="border-b border-slate-100">
+                      <td className="w-[220px] sm:w-[36%] px-4 py-2 min-h-[44px]">
+                        <div className="h-5 w-28 animate-pulse rounded bg-slate-100" />
+                      </td>
+                      <td className="w-[90px] sm:w-[12%] px-4 py-2 min-h-[44px]">
+                        <div className="h-5 w-10 animate-pulse rounded bg-slate-100" />
+                      </td>
+                      <td className="w-[140px] sm:w-[16%] px-4 py-2 min-h-[44px]">
+                        <div className="h-5 w-14 animate-pulse rounded bg-slate-100" />
+                      </td>
+                      <td className="w-[240px] sm:w-[22%] px-4 py-2 min-h-[52px]">
+                        <div className="h-4 w-20 animate-pulse rounded bg-slate-100" />
+                        <div className="mt-1 h-3 w-24 animate-pulse rounded bg-slate-100" />
+                      </td>
+                      <td className="w-[130px] sm:w-[14%] px-4 py-2 min-h-[44px]">
+                        <div className="h-7 w-28 animate-pulse rounded bg-slate-100" />
+                      </td>
                     </tr>
-                  </thead>
-                  <tbody>
-                    {rows.map((row, index) => (
-                      <tr
-                        key={row.id ?? `new-${index}`}
-                        className={`border-b border-slate-100 ${
-                          row.deleted ? "bg-red-50/40 text-slate-400" : ""
-                        }`}
-                      >
-                        <td className="px-4 py-2">
-                          {row.isEditing ? (
-                            <input
-                              type="text"
-                              className="w-full rounded-md border border-slate-200 px-2 py-1 text-sm shadow-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
-                              value={row.name}
-                              onChange={(e) =>
-                                handleChangeRow(index, "name", e.target.value)
-                              }
-                              placeholder="例如：麵糊"
-                            />
-                          ) : (
-                            <span className="text-sm text-slate-800">
+                  ))}
+                </tbody>
+              </table>
+            ) : (
+              <table className="min-w-[820px] table-fixed border border-slate-200 bg-white text-xs sm:w-full sm:min-w-0 sm:text-sm">
+                <thead>
+                  <tr className="bg-slate-50">
+                    <th className="w-[220px] sm:w-[36%] border-b border-slate-200 px-4 py-2 text-left font-medium text-slate-600">
+                      原料名稱
+                    </th>
+                    <th className="w-[90px] sm:w-[12%] border-b border-slate-200 px-4 py-2 text-left font-medium text-slate-600">
+                      單位
+                    </th>
+                    <th className="w-[140px] sm:w-[16%] border-b border-slate-200 px-4 py-2 text-left font-medium text-slate-600">
+                      目前庫存
+                    </th>
+                    <th className="w-[240px] sm:w-[22%] border-b border-slate-200 px-4 py-2 text-left font-medium text-slate-600">
+                      菜單需求
+                    </th>
+                    <th className="w-[130px] sm:w-[14%] border-b border-slate-200 px-4 py-2 text-left font-medium text-slate-600">
+                      操作
+                    </th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {rows.map((row, index) => (
+                    <tr
+                      key={row.id ?? `new-${index}`}
+                      className={`border-b border-slate-100 ${
+                        row.deleted ? "bg-red-50/40 text-slate-400" : ""
+                      }`}
+                    >
+                      <td className="w-[220px] sm:w-[36%] px-4 py-2 min-h-[44px]">
+                        {row.isEditing ? (
+                          <input
+                            type="text"
+                            className="h-9 w-full rounded-md border border-slate-200 px-2 py-0 text-xs sm:text-sm shadow-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
+                            value={row.name}
+                            onChange={(e) =>
+                              handleChangeRow(index, "name", e.target.value)
+                            }
+                            placeholder="例如：麵糊"
+                          />
+                        ) : (
+                          <div className="flex h-9 w-full items-center">
+                            <span className="truncate text-xs sm:text-sm text-slate-800">
                               {row.name || (
                                 <span className="text-slate-400">尚未命名</span>
                               )}
                             </span>
-                          )}
-                        </td>
-                        <td className="px-4 py-2">
-                          {row.isEditing ? (
-                            <input
-                              type="text"
-                              className="w-24 rounded-md border border-slate-200 px-2 py-1 text-sm shadow-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
-                              value={row.unit}
-                              onChange={(e) =>
-                                handleChangeRow(index, "unit", e.target.value)
-                              }
-                              placeholder="份"
-                            />
-                          ) : (
-                            <span className="text-sm text-slate-800">
-                              {row.unit || <span className="text-slate-400">份</span>}
+                          </div>
+                        )}
+                      </td>
+                      <td className="w-[90px] sm:w-[12%] px-4 py-2 min-h-[44px]">
+                        {row.isEditing ? (
+                          <input
+                            type="text"
+                            className="h-9 w-full rounded-md border border-slate-200 px-2 py-0 text-xs sm:text-sm shadow-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
+                            value={row.unit}
+                            onChange={(e) =>
+                              handleChangeRow(index, "unit", e.target.value)
+                            }
+                            placeholder="份"
+                          />
+                        ) : (
+                          <div className="flex h-9 items-center">
+                            <span className="truncate block w-full text-xs sm:text-sm text-slate-800">
+                              {row.unit || (
+                                <span className="text-slate-400">份</span>
+                              )}
                             </span>
-                          )}
-                        </td>
-                        <td className="px-4 py-2">
-                          {row.isEditing ? (
-                            <div className="flex items-center gap-2">
-                              <input
-                                type="number"
-                                min={0}
-                                className="w-28 rounded-md border border-slate-200 px-2 py-1 text-sm shadow-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
-                                value={row.quantity}
-                                onChange={(e) =>
-                                  handleChangeRow(index, "quantity", e.target.value)
-                                }
-                              />
-                              <span className="text-xs text-slate-500">
-                                {row.unit || "份"}
-                              </span>
-                            </div>
-                          ) : (
-                            <span className="text-sm text-slate-800">
+                          </div>
+                        )}
+                      </td>
+                      <td className="w-[140px] sm:w-[16%] px-4 py-2 min-h-[44px]">
+                        {row.isEditing ? (
+                          <div className="flex h-9 items-center gap-2">
+                            <input
+                              type="number"
+                              min={0}
+                              className="h-9 w-full rounded-md border border-slate-200 px-2 py-0 text-xs sm:text-sm shadow-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
+                              value={row.quantity}
+                              onChange={(e) =>
+                                handleChangeRow(
+                                  index,
+                                  "quantity",
+                                  e.target.value
+                                )
+                              }
+                            />
+                            <span className="text-xs text-slate-500">
+                              {row.unit || "份"}
+                            </span>
+                          </div>
+                        ) : (
+                          <div className="flex h-9 items-center">
+                            <span className="whitespace-nowrap text-xs sm:text-sm text-slate-800">
                               {row.quantity} {row.unit || "份"}
                             </span>
-                          )}
-                        </td>
-                        <td className="px-4 py-2">
-                          {row.id && demandByIngredient[row.id] != null ? (
-                            <div className="text-xs">
-                              <p
-                                className={
-                                  row.quantity < demandByIngredient[row.id]
-                                    ? "font-medium text-red-600"
-                                    : "text-slate-600"
-                                }
-                              >
-                                菜單最大需求約{" "}
-                                {demandByIngredient[row.id]} {row.unit || "份"}/天
-                              </p>
-                              {row.quantity < demandByIngredient[row.id] && (
-                                <p className="mt-0.5 text-[11px] text-red-500">
-                                  目前庫存可能不足，請留意補貨。
-                                </p>
-                              )}
-                            </div>
-                          ) : (
-                            <span className="text-xs text-slate-400">—</span>
-                          )}
-                        </td>
-                        <td className="px-4 py-2">
-                          <div className="flex items-center gap-2">
-                            <Button
-                              type="button"
-                              variant="outline"
-                              size="xs"
-                              onClick={() => handleToggleEdit(index)}
-                            >
-                              {row.isEditing ? "完成" : "編輯"}
-                            </Button>
-                            <button
-                              type="button"
-                              onClick={() => handleToggleDelete(index)}
-                              className="rounded-md px-3 py-1 text-xs text-slate-600 hover:bg-slate-100"
-                            >
-                              {row.deleted ? "還原" : "標記刪除"}
-                            </button>
                           </div>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </>
-          )}
+                        )}
+                      </td>
+                      <td className="w-[240px] sm:w-[22%] px-4 py-2 min-h-[52px]">
+                        {row.id && demandByIngredient[row.id] != null ? (
+                          <div className="min-h-[52px] text-xs">
+                            <p
+                              className={
+                                row.quantity < demandByIngredient[row.id]
+                                  ? "font-medium text-red-600"
+                                  : "text-slate-600"
+                              }
+                            >
+                              菜單最大需求約 {demandByIngredient[row.id]}{" "}
+                              {row.unit || "份"}/天
+                            </p>
+                            <p
+                              className={`mt-0.5 text-[11px] text-red-500 ${
+                                row.quantity < demandByIngredient[row.id]
+                                  ? ""
+                                  : "invisible"
+                              }`}
+                            >
+                              目前庫存可能不足，請留意補貨。
+                            </p>
+                          </div>
+                        ) : (
+                          <div className="min-h-[52px] text-xs">
+                            <p className="text-xs text-slate-400">—</p>
+                            <p className="mt-0.5 text-[11px] text-red-500 invisible">
+                              目前庫存可能不足，請留意補貨。
+                            </p>
+                          </div>
+                        )}
+                      </td>
+                      <td className="w-[130px] sm:w-[14%] px-4 py-2 min-h-[44px]">
+                        <div className="flex flex-nowrap items-center gap-2">
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="xs"
+                            onClick={() => handleToggleEdit(index)}
+                          >
+                            {row.isEditing ? "完成" : "編輯"}
+                          </Button>
+                          <button
+                            type="button"
+                            onClick={() => handleToggleDelete(index)}
+                            className="rounded-md px-3 py-1 text-xs text-slate-600 hover:bg-slate-100"
+                          >
+                            {row.deleted ? "還原" : "標記刪除"}
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
+          </div>
         </Card>
       )}
     </div>
   );
 }
-

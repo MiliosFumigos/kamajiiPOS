@@ -84,7 +84,9 @@ function formatEta(
   minutes: number | null | undefined
 ) {
   if (!iso) return null;
-  const m = Number.isFinite(minutes) ? Math.max(0, Math.floor(minutes as number)) : 0;
+  const m = Number.isFinite(minutes)
+    ? Math.max(0, Math.floor(minutes as number))
+    : 0;
   const base = new Date(iso);
   if (Number.isNaN(base.getTime())) return null;
   const eta = new Date(base.getTime() + m * 60_000);
@@ -102,9 +104,13 @@ export default function AppOrdersPage() {
   const [saving, setSaving] = useState<string | null>(null);
   const [etaUpdatingIds, setEtaUpdatingIds] = useState<Set<string>>(new Set());
   const [dates, setDates] = useState<string[]>([]);
-  const [selectedDate, setSelectedDate] = useState<"today" | "all" | string>("today");
+  const [selectedDate, setSelectedDate] = useState<"today" | "all" | string>(
+    "today"
+  );
   const [sortConfig, setSortConfig] = useState<SortConfig>(null);
-  const [statusFilter, setStatusFilter] = useState<"ALL" | keyof typeof statusLabels>("ALL");
+  const [statusFilter, setStatusFilter] = useState<
+    "ALL" | keyof typeof statusLabels
+  >("ALL");
   const [paymentFilter, setPaymentFilter] = useState<
     "ALL" | keyof typeof paymentStatusLabels
   >("ALL");
@@ -116,7 +122,9 @@ export default function AppOrdersPage() {
     setError(null);
     try {
       const dateQuery =
-        dateParam && dateParam !== "all" ? `&date=${encodeURIComponent(dateParam)}` : "";
+        dateParam && dateParam !== "all"
+          ? `&date=${encodeURIComponent(dateParam)}`
+          : "";
       const res = await fetch(`/api/orders?limit=80${dateQuery}`);
       if (!res.ok) throw new Error("載入訂單失敗");
       const data = (await res.json()) as { items: Order[]; dates?: string[] };
@@ -322,15 +330,14 @@ export default function AppOrdersPage() {
         <div>
           <h2 className="text-xl font-semibold text-slate-900">訂單管理</h2>
           <p className="mt-1 text-sm text-slate-600">
-            這裡會顯示本店最新訂單，並可切換訂單狀態與付款狀態（未來可延伸到 Kitchen
-            Display）。
+            此處顯示本店最新訂單，並可切換訂單狀態與付款狀態。
           </p>
         </div>
-        <div className="flex flex-col items-stretch gap-2 md:flex-row md:items-center">
-          <div className="flex items-center gap-2 text-sm">
+        <div className="flex flex-col items-stretch gap-2 md:flex-row md:items-center md:justify-end">
+          <div className="flex flex-wrap items-center gap-2 text-sm w-full md:w-auto">
             <span className="text-slate-600">顯示日期</span>
             <select
-              className="rounded-md border border-slate-200 bg-white px-2 py-1 text-sm text-slate-700"
+              className="w-full md:w-auto rounded-md border border-slate-200 bg-white px-2 py-1 text-center text-sm text-slate-700"
               value={selectedDate}
               onChange={(e) =>
                 setSelectedDate(e.target.value as "today" | "all" | string)
@@ -339,14 +346,15 @@ export default function AppOrdersPage() {
               <option value="today">今天</option>
               <option value="all">全部最近訂單</option>
               {dates.map((d) => (
-                <option key={d} value={d}>
+                <option key={d} value={d} className="text-center">
                   {`${d.slice(0, 4)}-${d.slice(4, 6)}-${d.slice(6, 8)}`}
                 </option>
               ))}
             </select>
           </div>
           <button
-            className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700 hover:bg-slate-50"
+            type="button"
+            className="w-full md:w-auto rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700 hover:bg-slate-50"
             onClick={() => void reload(selectedDate)}
             disabled={loading}
           >
@@ -364,7 +372,9 @@ export default function AppOrdersPage() {
                 className="rounded-md border border-slate-200 bg-white px-2 py-1 text-sm text-slate-700"
                 value={statusFilter}
                 onChange={(e) =>
-                  setStatusFilter(e.target.value as "ALL" | keyof typeof statusLabels)
+                  setStatusFilter(
+                    e.target.value as "ALL" | keyof typeof statusLabels
+                  )
                 }
               >
                 <option value="ALL">全部</option>
@@ -405,7 +415,7 @@ export default function AppOrdersPage() {
             >
               只看進行中（準備中 / 製作中 / 待取貨）
             </button>
-            <div className="ml-auto flex items-center gap-2 text-sm">
+            <div className="w-full flex flex-wrap items-center justify-center gap-2 text-sm md:w-auto md:ml-auto md:flex-nowrap md:justify-end">
               <input
                 className="w-56 rounded-md border border-slate-200 bg-white px-2 py-1 text-sm text-slate-700"
                 placeholder="搜尋訂單編號 / 內容關鍵字"
@@ -423,7 +433,9 @@ export default function AppOrdersPage() {
         ) : error ? (
           <p className="px-4 py-3 text-sm text-red-600">{error}</p>
         ) : displayRows.length === 0 ? (
-          <p className="px-4 py-3 text-sm text-slate-500">目前沒有符合條件的訂單。</p>
+          <p className="px-4 py-3 text-sm text-slate-500">
+            目前沒有符合條件的訂單。
+          </p>
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full">
@@ -516,10 +528,17 @@ export default function AppOrdersPage() {
                             </>
                           )}
                           {etaUpdatingIds.has(order.id) && (
-                            <span className="text-xs text-slate-500">更新中…</span>
+                            <span className="text-xs text-slate-500">
+                              更新中…
+                            </span>
                           )}
                           <span className="text-xs text-slate-500">
-                            預估 {Math.max(0, Math.floor(order.totalPrepMinutes ?? 0))} 分
+                            預估{" "}
+                            {Math.max(
+                              0,
+                              Math.floor(order.totalPrepMinutes ?? 0)
+                            )}{" "}
+                            分
                           </span>
                           <span
                             className={`rounded-full px-2 py-0.5 text-xs ${
@@ -538,9 +557,14 @@ export default function AppOrdersPage() {
                               onChange={(e) =>
                                 void updateOrderStatus(order.id, e.target.value)
                               }
-                              disabled={saving === order.id || etaUpdatingIds.has(order.id)}
+                              disabled={
+                                saving === order.id ||
+                                etaUpdatingIds.has(order.id)
+                              }
                             >
-                              <option value="QUEUED">{statusLabels.QUEUED}</option>
+                              <option value="QUEUED">
+                                {statusLabels.QUEUED}
+                              </option>
                               <option value="IN_PROGRESS">
                                 {statusLabels.IN_PROGRESS}
                               </option>
@@ -592,4 +616,3 @@ export default function AppOrdersPage() {
     </div>
   );
 }
-

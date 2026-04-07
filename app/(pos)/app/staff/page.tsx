@@ -28,7 +28,10 @@ export default function AppStaffPage() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [storeName, setStoreName] = useState("");
-  const [message, setMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
+  const [message, setMessage] = useState<{
+    type: "success" | "error";
+    text: string;
+  } | null>(null);
   const [loading, setLoading] = useState(false);
 
   const [staff, setStaff] = useState<StaffItem[]>([]);
@@ -138,7 +141,10 @@ export default function AppStaffPage() {
           <p className="mb-4 text-sm text-slate-600">
             只有品牌持有人可以建立分店長
           </p>
-          <form onSubmit={handleCreateManager} className="max-w-md space-y-4">
+          <form
+            onSubmit={handleCreateManager}
+            className="md:max-w-md space-y-4 md:mx-0"
+          >
             <Input
               label="姓名"
               value={name}
@@ -170,18 +176,23 @@ export default function AppStaffPage() {
               minLength={8}
               required
             />
+
             {message && (
               <div
                 className={`rounded-lg p-3 text-sm ${
-                  message.type === "success" ? "bg-green-50 text-green-700" : "bg-red-50 text-red-700"
+                  message.type === "success"
+                    ? "bg-green-50 text-green-700"
+                    : "bg-red-50 text-red-700"
                 }`}
               >
                 {message.text}
               </div>
             )}
-            <Button type="submit" disabled={loading}>
-              {loading ? "建立中..." : "建立分店長"}
-            </Button>
+            <div className="flex justify-center md:justify-start">
+              <Button type="submit" disabled={loading}>
+                {loading ? "建立中..." : "建立分店長"}
+              </Button>
+            </div>
           </form>
         </Card>
       )}
@@ -191,7 +202,7 @@ export default function AppStaffPage() {
           <p className="mb-4 text-sm text-slate-600">
             您可以為此分店建立員工帳號
           </p>
-          <form onSubmit={handleCreateStaff} className="max-w-md space-y-4">
+          <form onSubmit={handleCreateStaff} className="md:max-w-md space-y-4">
             <Input
               label="姓名"
               value={name}
@@ -219,15 +230,19 @@ export default function AppStaffPage() {
             {message && (
               <div
                 className={`rounded-lg p-3 text-sm ${
-                  message.type === "success" ? "bg-green-50 text-green-700" : "bg-red-50 text-red-700"
+                  message.type === "success"
+                    ? "bg-green-50 text-green-700"
+                    : "bg-red-50 text-red-700"
                 }`}
               >
                 {message.text}
               </div>
             )}
-            <Button type="submit" disabled={loading}>
-              {loading ? "建立中..." : "建立員工"}
-            </Button>
+            <div className="flex justify-center md:justify-start">
+              <Button type="submit" disabled={loading}>
+                {loading ? "建立中..." : "建立員工"}
+              </Button>
+            </div>
           </form>
         </Card>
       )}
@@ -235,7 +250,8 @@ export default function AppStaffPage() {
       {!isOwner && !isManager && (
         <Card>
           <p className="text-slate-600">
-            您目前的角色為 {roleLabels[session?.user?.role || ""] || session?.user?.role}
+            您目前的角色為{" "}
+            {roleLabels[session?.user?.role || ""] || session?.user?.role}
             ，僅品牌持有人與分店長可建立帳號。
           </p>
         </Card>
@@ -243,11 +259,7 @@ export default function AppStaffPage() {
 
       <Card title="員工列表">
         {staffLoading && <p className="text-sm text-slate-500">載入中...</p>}
-        {staffError && (
-          <p className="text-sm text-red-600">
-            {staffError}
-          </p>
-        )}
+        {staffError && <p className="text-sm text-red-600">{staffError}</p>}
         {!staffLoading && !staffError && staff.length === 0 && (
           <p className="text-sm text-slate-500">目前尚無員工。</p>
         )}
@@ -261,7 +273,9 @@ export default function AppStaffPage() {
                 <p className="font-medium">{user.name || "(未填姓名)"}</p>
                 <p className="text-sm text-slate-600">{user.email}</p>
                 {user.storeName && (
-                  <p className="text-xs text-slate-500">分店：{user.storeName}</p>
+                  <p className="text-xs text-slate-500">
+                    分店：{user.storeName}
+                  </p>
                 )}
               </div>
               <span className="rounded bg-brand-100 px-2 py-0.5 text-xs font-medium text-brand-700">
@@ -274,4 +288,3 @@ export default function AppStaffPage() {
     </div>
   );
 }
-

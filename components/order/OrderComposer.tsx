@@ -297,25 +297,35 @@ export function OrderComposer({
         </div>
       </div>
 
-      {success && (
+      {/* 預留「訂單已建立」區塊空間；無資料時顯示說明，避免成功後彈出造成 CLS */}
+      <div aria-live="polite">
         <Card>
-          <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
-            <div>
-              <p className="text-sm font-medium text-slate-900">訂單已建立</p>
-              <p className="mt-1 text-xs text-slate-600">
-                訂單編號：<span className="font-semibold">{success.displayId}</span>{" "}
-                · 時間：{formatTime(new Date(success.placedAt))}
+          <div className="min-h-[72px] flex flex-col justify-center gap-2 md:flex-row md:items-center md:justify-between">
+            {!success ? (
+              <p className="text-sm text-slate-500">
+                送出訂單後，此處會顯示最新一筆訂單編號、時間、金額與狀態。
               </p>
-            </div>
-            <div className="text-right">
-              <p className="text-sm text-slate-700">
-                金額 <span className="font-semibold">${success.total}</span>
-              </p>
-              <p className="text-xs text-slate-500">狀態：{success.status}</p>
-            </div>
+            ) : (
+              <>
+                <div>
+                  <p className="text-sm font-medium text-slate-900">訂單已建立</p>
+                  <p className="mt-1 text-xs text-slate-600">
+                    訂單編號：
+                    <span className="font-semibold"> {success.displayId}</span> ·
+                    時間：{formatTime(new Date(success.placedAt))}
+                  </p>
+                </div>
+                <div className="text-right md:shrink-0">
+                  <p className="text-sm text-slate-700">
+                    金額 <span className="font-semibold">${success.total}</span>
+                  </p>
+                  <p className="text-xs text-slate-500">狀態：{success.status}</p>
+                </div>
+              </>
+            )}
           </div>
         </Card>
-      )}
+      </div>
 
       <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_360px]">
         <Card title="菜單">

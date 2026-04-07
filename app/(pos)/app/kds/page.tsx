@@ -52,9 +52,14 @@ function minutesSince(iso: string) {
   return Math.max(0, Math.floor((Date.now() - t) / 60_000));
 }
 
-function formatEta(iso: string | null | undefined, minutes: number | null | undefined) {
+function formatEta(
+  iso: string | null | undefined,
+  minutes: number | null | undefined
+) {
   if (!iso) return null;
-  const m = Number.isFinite(minutes) ? Math.max(0, Math.floor(minutes as number)) : 0;
+  const m = Number.isFinite(minutes)
+    ? Math.max(0, Math.floor(minutes as number))
+    : 0;
   const base = new Date(iso);
   if (Number.isNaN(base.getTime())) return null;
   const eta = new Date(base.getTime() + m * 60_000);
@@ -94,7 +99,9 @@ export default function AppKdsPage() {
   const [saving, setSaving] = useState<string | null>(null);
   const [autoRefresh, setAutoRefresh] = useState(true);
   const [soundEnabled, setSoundEnabled] = useState(false);
-  const [toast, setToast] = useState<{ message: string; ts: number } | null>(null);
+  const [toast, setToast] = useState<{ message: string; ts: number } | null>(
+    null
+  );
   const fetchingRef = useRef(false);
   const baselineRef = useRef<Set<string> | null>(null);
   const toastTimerRef = useRef<number | null>(null);
@@ -113,9 +120,8 @@ export default function AppKdsPage() {
 
   const playBeep = () => {
     try {
-      const Ctx = (window.AudioContext || (window as any).webkitAudioContext) as
-        | typeof AudioContext
-        | undefined;
+      const Ctx = (window.AudioContext ||
+        (window as any).webkitAudioContext) as typeof AudioContext | undefined;
       if (!Ctx) return;
       const ctx = new Ctx();
       const osc = ctx.createOscillator();
@@ -139,7 +145,9 @@ export default function AppKdsPage() {
     if (!opts?.silent) setLoading(true);
     setError(null);
     try {
-      const res = await fetch(`/api/orders?limit=120&date=today`, { cache: "no-store" });
+      const res = await fetch(`/api/orders?limit=120&date=today`, {
+        cache: "no-store",
+      });
       if (!res.ok) throw new Error("載入訂單失敗");
       const data = (await res.json()) as { items: Order[] };
       const nextOrders = data.items ?? [];
@@ -229,7 +237,10 @@ export default function AppKdsPage() {
     );
   }, [orders]);
 
-  const queued = useMemo(() => active.filter((o) => o.status === "QUEUED"), [active]);
+  const queued = useMemo(
+    () => active.filter((o) => o.status === "QUEUED"),
+    [active]
+  );
   const inProgress = useMemo(
     () => active.filter((o) => o.status === "IN_PROGRESS"),
     [active]
@@ -335,13 +346,12 @@ export default function AppKdsPage() {
                       </div>
                       <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-slate-600">
                         <span>下單 {formatTime(new Date(o.placedAt))}</span>
-                        <span className="font-medium">
-                          已等 {waitMins} 分
-                        </span>
+                        <span className="font-medium">已等 {waitMins} 分</span>
                         <span className="rounded-full bg-blue-50 px-2 py-0.5 text-xs font-semibold text-blue-800">
                           客 ETA {customerEtaText ?? "—"}
                         </span>
-                        {(o.status === "QUEUED" || o.status === "IN_PROGRESS") && (
+                        {(o.status === "QUEUED" ||
+                          o.status === "IN_PROGRESS") && (
                           <span className="rounded-full bg-slate-900/5 px-2 py-0.5 text-xs font-semibold text-slate-700">
                             店員動態 ETA {staffEtaText ?? "—"}
                           </span>
@@ -349,7 +359,14 @@ export default function AppKdsPage() {
                       </div>
                     </div>
                     <div className="text-right text-xs text-slate-500">
-                      <div>共 {o.items?.reduce((acc, it) => acc + (it.quantity ?? 0), 0)} 件</div>
+                      <div>
+                        共{" "}
+                        {o.items?.reduce(
+                          (acc, it) => acc + (it.quantity ?? 0),
+                          0
+                        )}{" "}
+                        件
+                      </div>
                     </div>
                   </div>
 
@@ -372,14 +389,18 @@ export default function AppKdsPage() {
                     <button
                       type="button"
                       className={`inline-flex items-center justify-center rounded-xl px-4 py-2 text-sm font-semibold transition ${primaryAction.className}`}
-                      onClick={() => void updateOrderStatus(o.id, primaryAction.next)}
+                      onClick={() =>
+                        void updateOrderStatus(o.id, primaryAction.next)
+                      }
                       disabled={!canAdvance}
                     >
                       {saving === o.id ? "更新中..." : primaryAction.label}
                     </button>
                     <div className="text-xs text-slate-500">
                       {o.totalPrepMinutes != null ? (
-                        <span>預估 {Math.max(0, Math.floor(o.totalPrepMinutes))} 分</span>
+                        <span>
+                          預估 {Math.max(0, Math.floor(o.totalPrepMinutes))} 分
+                        </span>
                       ) : (
                         <span>預估 —</span>
                       )}
@@ -409,47 +430,54 @@ export default function AppKdsPage() {
       {toast && (
         <div className="pointer-events-none fixed right-6 top-6 z-50">
           <div className="rounded-2xl border border-slate-200 bg-white px-4 py-3 shadow-lg">
-            <p className="text-sm font-semibold text-slate-900">{toast.message}</p>
+            <p className="text-sm font-semibold text-slate-900">
+              {toast.message}
+            </p>
             <p className="mt-0.5 text-xs text-slate-500">KDS 會自動更新</p>
           </div>
         </div>
       )}
-      <div className="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
+      <div className="flex flex-col gap-3 xl:flex-row xl:items-end xl:justify-between">
         <div>
-          <h2 className="text-xl font-semibold text-slate-900">KDS（廚房看板）</h2>
+          <h2 className="text-xl font-semibold text-slate-900">
+            KDS（廚房看板）
+          </h2>
           <p className="mt-1 text-sm text-slate-600">
-            只顯示進行中訂單（待開始 / 製作中 / 待取貨）。點卡片按鈕即可推進流程。
+            只顯示進行中訂單（待開始 / 製作中 /
+            待取貨）。點卡片按鈕即可推進流程。
           </p>
         </div>
-        <div className="flex flex-col items-stretch gap-2 md:flex-row md:items-center">
-          <div className="flex items-center gap-2 text-sm">
-            <span className="text-slate-600">自動更新</span>
-            <button
-              type="button"
-              className={`rounded-full border px-3 py-1 text-xs font-medium transition ${
-                autoRefresh
-                  ? "border-emerald-500 bg-emerald-50 text-emerald-700"
-                  : "border-slate-200 bg-white text-slate-600 hover:bg-slate-50"
-              }`}
-              onClick={() => setAutoRefresh((v) => !v)}
-            >
-              {autoRefresh ? "開" : "關"}
-            </button>
-          </div>
-          <div className="flex items-center gap-2 text-sm">
-            <span className="text-slate-600">提示音</span>
-            <button
-              type="button"
-              className={`rounded-full border px-3 py-1 text-xs font-medium transition ${
-                soundEnabled
-                  ? "border-blue-500 bg-blue-50 text-blue-700"
-                  : "border-slate-200 bg-white text-slate-600 hover:bg-slate-50"
-              }`}
-              onClick={() => setSoundEnabled((v) => !v)}
-              title="瀏覽器通常需要先互動一次才允許播放聲音"
-            >
-              {soundEnabled ? "開" : "關"}
-            </button>
+        <div className="flex flex-col items-stretch gap-2 lg:flex-row lg:items-center">
+          <div className="flex gap-2 justify-center">
+            <div className="flex items-center gap-2 text-sm">
+              <span className="text-slate-600">自動更新</span>
+              <button
+                type="button"
+                className={`rounded-full border px-3 py-1 text-xs font-medium transition ${
+                  autoRefresh
+                    ? "border-emerald-500 bg-emerald-50 text-emerald-700"
+                    : "border-slate-200 bg-white text-slate-600 hover:bg-slate-50"
+                }`}
+                onClick={() => setAutoRefresh((v) => !v)}
+              >
+                {autoRefresh ? "開" : "關"}
+              </button>
+            </div>
+            <div className="flex items-center gap-2 text-sm">
+              <span className="text-slate-600">提示音</span>
+              <button
+                type="button"
+                className={`rounded-full border px-3 py-1 text-xs font-medium transition ${
+                  soundEnabled
+                    ? "border-blue-500 bg-blue-50 text-blue-700"
+                    : "border-slate-200 bg-white text-slate-600 hover:bg-slate-50"
+                }`}
+                onClick={() => setSoundEnabled((v) => !v)}
+                title="瀏覽器通常需要先互動一次才允許播放聲音"
+              >
+                {soundEnabled ? "開" : "關"}
+              </button>
+            </div>
           </div>
           <button
             className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700 hover:bg-slate-50"
@@ -487,4 +515,3 @@ export default function AppKdsPage() {
     </div>
   );
 }
-

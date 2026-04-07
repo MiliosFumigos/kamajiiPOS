@@ -3,8 +3,7 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { getBrandFromSubdomain } from "@/lib/brand-context";
 import { prisma } from "@/lib/prisma";
-import { Sidebar } from "@/components/dashboard/Sidebar";
-import { Topbar } from "@/components/dashboard/Topbar";
+import { DashboardShell } from "@/components/dashboard/DashboardShell";
 
 export default async function AppLayout({
   children,
@@ -70,21 +69,16 @@ export default async function AppLayout({
   }
 
   return (
-    <div className="flex h-screen">
-      <Sidebar
-        brandName={brand.name}
-        brandSubdomain={brand.subdomain}
-        userRole={session.user.role}
-        userName={session.user.name ?? null}
-        storeName={storeName}
-      />
-      <div className="flex flex-1 flex-col overflow-hidden">
-        <Topbar title="管理後台" />
-        <main className="flex-1 overflow-auto bg-slate-50 p-6">
-          {children}
-        </main>
-      </div>
-    </div>
+    <DashboardShell
+      topbarTitle="管理後台"
+      brandName={brand.name}
+      brandSubdomain={brand.subdomain}
+      userRole={session.user.role}
+      userName={session.user.name ?? null}
+      storeName={storeName}
+    >
+      {children}
+    </DashboardShell>
   );
 }
 

@@ -39,6 +39,51 @@ type MenuItem = {
   customizations: CustomizationOption[];
 };
 
+function MenuPreviewCardSkeleton() {
+  return (
+    <div className="flex flex-col overflow-hidden rounded-xl border border-slate-200 bg-white">
+      {/* 固定高度圖片區：避免有/無圖片時造成 CLS */}
+      <div className="h-32 w-full animate-pulse bg-slate-100" />
+      <div className="space-y-2 p-4">
+        <div className="h-5 w-36 rounded bg-slate-100 animate-pulse" />
+        <div className="h-3 w-44 rounded bg-slate-100 animate-pulse" />
+        <div className="mt-1 flex flex-wrap gap-1">
+          <div className="h-5 w-16 rounded-full bg-slate-100 animate-pulse" />
+          <div className="h-5 w-20 rounded-full bg-slate-100 animate-pulse" />
+          <div className="h-5 w-14 rounded-full bg-slate-100 animate-pulse" />
+        </div>
+        <div className="space-y-1 pt-1">
+          <div className="h-3 w-28 rounded bg-slate-100 animate-pulse" />
+          <div className="h-3 w-32 rounded bg-slate-100 animate-pulse" />
+          <div className="h-3 w-24 rounded bg-slate-100 animate-pulse" />
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function InventoryDemandCardSkeleton() {
+  return (
+    <div className="flex flex-col gap-2 rounded-lg border border-slate-100 bg-slate-50 p-3 md:flex-row md:items-center md:justify-between">
+      <div className="flex-1 space-y-2 min-w-0">
+        <div className="h-4 w-40 rounded bg-slate-100 animate-pulse" />
+        <div className="h-3 w-28 rounded bg-slate-100 animate-pulse" />
+      </div>
+      <div className="flex flex-1 flex-col gap-2 md:flex-row md:items-center md:justify-end">
+        <div className="flex items-center gap-2 text-xs text-slate-600">
+          <div className="h-3 w-20 rounded bg-slate-100 animate-pulse" />
+          <div className="h-3 w-10 rounded bg-slate-100 animate-pulse" />
+          <div className="h-3 w-10 rounded bg-slate-100 animate-pulse" />
+        </div>
+        <div className="text-right text-xs space-y-2">
+          <div className="h-3 w-44 rounded bg-slate-100 animate-pulse" />
+          <div className="h-3 w-36 rounded bg-slate-100 animate-pulse" />
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function AppMenuPage() {
   const { data: session } = useSession();
   const role = session?.user?.role as Role | undefined;
@@ -446,31 +491,36 @@ export default function AppMenuPage() {
                   }
                   required
                 />
-                <Input
-                  label="今日可販售數量（份）"
-                  type="number"
-                  min={0}
-                  value={newItem.dailyLimit}
-                  onChange={(e) =>
-                    setNewItem({
-                      ...newItem,
-                      dailyLimit: Number(e.target.value) || 0,
-                    })
-                  }
-                  required
-                />
+                <div className="w-full">
+                  <label className="mb-1 block min-h-[1.25rem] w-full truncate text-sm font-medium text-slate-700 leading-tight">
+                    今日可販售數量（份）
+                  </label>
+                  <Input
+                    type="number"
+                    min={0}
+                    value={newItem.dailyLimit}
+                    onChange={(e) =>
+                      setNewItem({
+                        ...newItem,
+                        dailyLimit: Number(e.target.value) || 0,
+                      })
+                    }
+                    required
+                  />
+                </div>
               </div>
 
               <div className="space-y-2">
                 <label className="block text-xs font-medium text-slate-600">
                   商品種類（標籤）
                 </label>
-                <div className="flex gap-2">
+                <div className="flex items-stretch gap-2">
                   <Input
                     label=""
                     value={categoryInput}
                     onChange={(e) => setCategoryInput(e.target.value)}
                     placeholder="例如：甜點、強烈推薦"
+                    className="h-8 py-0 px-3 text-sm"
                     onKeyDown={(e) => {
                       if (e.key === "Enter") {
                         e.preventDefault();
@@ -481,8 +531,10 @@ export default function AppMenuPage() {
                   <Button
                     type="button"
                     variant="outline"
+                    size="sm"
                     onClick={handleAddCategory}
                     disabled={!categoryInput.trim()}
+                    className="shrink-0 whitespace-nowrap border-brand-500/20 text-brand-700 hover:bg-brand-50"
                   >
                     新增種類
                   </Button>
@@ -518,13 +570,15 @@ export default function AppMenuPage() {
               />
               <Button
                 type="submit"
-                className="w-full md:w-auto"
+                className="hidden md:w-auto"
                 disabled={saving}
               >
                 {saving ? "儲存中..." : "加入今日菜單"}
               </Button>
               {menuError && (
-                <p className="text-xs text-red-600">{menuError}</p>
+                <p className="hidden text-xs text-red-600 md:block">
+                  {menuError}
+                </p>
               )}
             </div>
 
@@ -592,7 +646,7 @@ export default function AppMenuPage() {
                     <button
                       type="button"
                       onClick={() => removeRecipeLine(index)}
-                      className="mb-1 rounded-md px-2 py-1 text-xs text-slate-500 hover:bg-slate-100"
+                      className="mb-1 shrink-0 whitespace-nowrap rounded-md px-2 py-1 text-xs text-slate-500 hover:bg-slate-100"
                     >
                       刪除
                     </button>
@@ -605,6 +659,7 @@ export default function AppMenuPage() {
                 size="sm"
                 onClick={addRecipeLine}
                 disabled={ingredients.length === 0}
+                className="shrink-0 whitespace-nowrap border-brand-500/20 text-brand-700 hover:bg-brand-50"
               >
                 新增原料行
               </Button>
@@ -677,7 +732,7 @@ export default function AppMenuPage() {
                         <button
                           type="button"
                           onClick={() => removeCustomizationLine(index)}
-                          className="mb-1 rounded-md px-2 py-1 text-xs text-slate-500 hover:bg-slate-100"
+                          className="mb-1 shrink-0 whitespace-nowrap rounded-md px-2 py-1 text-xs text-slate-500 hover:bg-slate-100"
                         >
                           刪除
                         </button>
@@ -751,7 +806,7 @@ export default function AppMenuPage() {
                                 onClick={() =>
                                   removeCustomizationRecipeLine(index, ri)
                                 }
-                                className="mb-1 rounded-md px-2 py-1 text-[11px] text-slate-500 hover:bg-slate-100"
+                                className="mb-1 shrink-0 whitespace-nowrap rounded-md px-2 py-1 text-[11px] text-slate-500 hover:bg-slate-100"
                               >
                                 刪除
                               </button>
@@ -764,6 +819,7 @@ export default function AppMenuPage() {
                           size="sm"
                           onClick={() => addCustomizationRecipeLine(index)}
                           disabled={ingredients.length === 0}
+                          className="shrink-0 whitespace-nowrap border-brand-500/20 text-brand-700 hover:bg-brand-50"
                         >
                           新增額外原料行
                         </Button>
@@ -776,9 +832,20 @@ export default function AppMenuPage() {
                   variant="outline"
                   size="sm"
                   onClick={addCustomizationLine}
+                  className="shrink-0 whitespace-nowrap border-brand-500/20 text-brand-700 hover:bg-brand-50"
                 >
                   新增客製化項目
                 </Button>
+
+                {/* 手機版：把「加入今日菜單」放到客製化項目下面 */}
+                <div className="mt-2 md:hidden">
+                  <Button type="submit" className="w-full" disabled={saving}>
+                    {saving ? "儲存中..." : "加入今日菜單"}
+                  </Button>
+                  {menuError && (
+                    <p className="mt-2 text-xs text-red-600">{menuError}</p>
+                  )}
+                </div>
               </div>
             </div>
           </form>
@@ -786,7 +853,7 @@ export default function AppMenuPage() {
       )}
 
       <Card title="今日菜單預覽">
-        <div className="mb-3 flex items-center justify-between">
+        <div className="mb-3 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
           <p className="text-sm text-slate-600">
             這裡顯示目前已儲存的菜單品項。
           </p>
@@ -801,7 +868,11 @@ export default function AppMenuPage() {
           )}
         </div>
         {menuLoading ? (
-          <p className="text-sm text-slate-500">載入菜單中...</p>
+          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+            {Array.from({ length: 6 }).map((_, i) => (
+              <MenuPreviewCardSkeleton key={i} />
+            ))}
+          </div>
         ) : menuError ? (
           <p className="text-sm text-red-600">{menuError}</p>
         ) : menuItems.length === 0 ? (
@@ -815,51 +886,58 @@ export default function AppMenuPage() {
                 key={item.id}
                 className="flex flex-col overflow-hidden rounded-xl border border-slate-200 bg-white"
               >
-                {item.imageUrl && (
+                {/* 固定高度圖片區：有/無圖片都維持同高度 */}
+                {item.imageUrl ? (
                   // eslint-disable-next-line @next/next/no-img-element
                   <img
                     src={item.imageUrl}
                     alt={item.name}
                     className="h-32 w-full object-cover"
                   />
+                ) : (
+                  <div className="h-32 w-full bg-slate-100" />
                 )}
                 <div className="space-y-2 p-4">
                   <div className="flex items-start justify-between gap-2">
-                    <div>
+                    <div className="min-w-0">
                       <h3 className="font-semibold text-slate-900">
-                        {item.name}
+                        <span className="block truncate">{item.name}</span>
                       </h3>
                       <p className="text-xs text-slate-500">
                         今日限量 {item.dailyLimit} 份 · 約 {item.prepMinutes}{" "}
                         分鐘／份
                       </p>
-                      {item.categories.length > 0 && (
-                        <div className="mt-1 flex flex-wrap gap-1">
-                          {item.categories.map((cat) => (
-                            <span
-                              key={cat}
-                              className="rounded-full bg-slate-100 px-2 py-0.5 text-[10px] text-slate-600"
-                            >
-                              {cat}
-                            </span>
-                          ))}
-                        </div>
-                      )}
+                      <div className="mt-1 min-h-5">
+                        {item.categories.length > 0 && (
+                          <div className="flex flex-wrap gap-1">
+                            {item.categories.map((cat) => (
+                              <span
+                                key={cat}
+                                className="rounded-full bg-slate-100 px-2 py-0.5 text-[10px] text-slate-600"
+                              >
+                                {cat}
+                              </span>
+                            ))}
+                          </div>
+                        )}
+                      </div>
                     </div>
-                    <div className="text-right space-y-2">
+                    <div className="text-right space-y-2 shrink-0">
                       <span className="block text-sm font-medium text-brand-700">
                         ${item.price}
                       </span>
-                      {isManagerOrStaff && editingMode && (
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => handleDeleteMenuItem(item.id)}
-                          disabled={saving}
-                        >
-                          刪除
-                        </Button>
-                      )}
+                      <div className="min-h-[38px]">
+                        {isManagerOrStaff && editingMode && (
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => handleDeleteMenuItem(item.id)}
+                            disabled={saving}
+                          >
+                            刪除
+                          </Button>
+                        )}
+                      </div>
                     </div>
                   </div>
                   <div className="space-y-1">
@@ -879,21 +957,23 @@ export default function AppMenuPage() {
                         );
                       })}
                     </ul>
-                    {item.customizations.length > 0 && (
-                      <div className="pt-2">
-                        <p className="text-xs font-medium text-slate-600">
-                          可選客製化項目：
-                        </p>
-                        <ul className="mt-1 space-y-0.5 text-xs text-slate-600">
-                          {item.customizations.map((c) => (
-                            <li key={c.id ?? c.label}>
-                              {c.label}（+{c.priceDelta} 元，最多{" "}
-                              {c.maxQuantity}）
-                            </li>
-                          ))}
-                        </ul>
-                      </div>
-                    )}
+                    <div className="pt-2 min-h-[40px]">
+                      {item.customizations.length > 0 && (
+                        <>
+                          <p className="text-xs font-medium text-slate-600">
+                            可選客製化項目：
+                          </p>
+                          <ul className="mt-1 space-y-0.5 text-xs text-slate-600">
+                            {item.customizations.map((c) => (
+                              <li key={c.id ?? c.label}>
+                                {c.label}（+{c.priceDelta} 元，最多{" "}
+                                {c.maxQuantity}）
+                              </li>
+                            ))}
+                          </ul>
+                        </>
+                      )}
+                    </div>
                   </div>
                 </div>
               </div>
@@ -907,7 +987,11 @@ export default function AppMenuPage() {
           根據今日菜單與每份用量，估算各原料最低需求量，協助您決定需要準備多少庫存。
         </p>
         {inventoryLoading ? (
-          <p className="text-sm text-slate-500">載入庫存中...</p>
+          <div className="space-y-2">
+            {Array.from({ length: 6 }).map((_, i) => (
+              <InventoryDemandCardSkeleton key={i} />
+            ))}
+          </div>
         ) : inventoryError ? (
           <p className="text-sm text-red-600">{inventoryError}</p>
         ) : ingredients.length === 0 ? (
@@ -926,8 +1010,8 @@ export default function AppMenuPage() {
                   key={ing.id}
                   className="flex flex-col gap-2 rounded-lg border border-slate-100 bg-slate-50 p-3 md:flex-row md:items-center md:justify-between"
                 >
-                  <div>
-                    <p className="text-sm font-medium text-slate-800">
+                  <div className="min-w-0">
+                    <p className="text-sm font-medium text-slate-800 truncate">
                       {ing.name}
                     </p>
                     <p className="text-xs text-slate-500">單位：{ing.unit}</p>
