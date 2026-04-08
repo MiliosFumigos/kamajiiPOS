@@ -101,24 +101,49 @@ export async function POST(request: Request) {
 
       if (!name) continue;
 
+      // 前端新增列會用 crypto.randomUUID() 當暫存 id，DB 尚無該筆時不可 update，需改為 create
       if (item.id) {
-        const ing = await tx.ingredient.update({
-          where: { id: item.id },
-          data: { name, unit, storeId },
+        const existing = await tx.ingredient.findFirst({
+          where: { id: item.id, brandId, storeId },
         });
 
-        await tx.inventory.upsert({
-          where: {
-            storeId_ingredientId: { storeId, ingredientId: ing.id },
-          },
-          update: { quantity, brandId, storeId },
-          create: {
-            brandId,
-            storeId,
-            ingredientId: ing.id,
-            quantity,
-          },
-        });
+        if (existing) {
+          const ing = await tx.ingredient.update({
+            where: { id: existing.id },
+            data: { name, unit, storeId },
+          });
+
+          await tx.inventory.upsert({
+            where: {
+              storeId_ingredientId: { storeId, ingredientId: ing.id },
+            },
+            update: { quantity, brandId, storeId },
+            create: {
+              brandId,
+              storeId,
+              ingredientId: ing.id,
+              quantity,
+            },
+          });
+        } else {
+          const ing = await tx.ingredient.create({
+            data: {
+              name,
+              unit,
+              brandId,
+              storeId,
+            },
+          });
+
+          await tx.inventory.create({
+            data: {
+              brandId,
+              storeId,
+              ingredientId: ing.id,
+              quantity,
+            },
+          });
+        }
       } else {
         const ing = await tx.ingredient.create({
           data: {
