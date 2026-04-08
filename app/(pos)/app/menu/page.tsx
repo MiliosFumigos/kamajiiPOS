@@ -338,9 +338,7 @@ export default function AppMenuPage() {
       const customizations = [...prev.customizations];
       const current = customizations[customizationIndex];
       if (!current) return prev;
-      const recipe = (current.recipe ?? []).filter(
-        (_, i) => i !== lineIndex
-      );
+      const recipe = (current.recipe ?? []).filter((_, i) => i !== lineIndex);
       customizations[customizationIndex] = { ...current, recipe };
       return { ...prev, customizations };
     });
@@ -448,7 +446,8 @@ export default function AppMenuPage() {
       {!isManagerOrStaff && (
         <Card>
           <p className="text-sm text-slate-600">
-            您目前的角色為 {role ?? "未知"}，僅分店長與店員可以建立或調整每日菜單。
+            您目前的角色為 {role ?? "未知"}
+            ，僅分店長與店員可以建立或調整每日菜單。
           </p>
         </Card>
       )}
@@ -568,17 +567,11 @@ export default function AppMenuPage() {
                 }
                 required
               />
-              <Button
-                type="submit"
-                className="hidden md:w-auto"
-                disabled={saving}
-              >
+              <Button type="submit" className="md:w-auto" disabled={saving}>
                 {saving ? "儲存中..." : "加入今日菜單"}
               </Button>
               {menuError && (
-                <p className="hidden text-xs text-red-600 md:block">
-                  {menuError}
-                </p>
+                <p className="text-xs text-red-600 md:block">{menuError}</p>
               )}
             </div>
 
@@ -602,9 +595,7 @@ export default function AppMenuPage() {
                         原料
                       </label>
                       {ingredients.length === 0 ? (
-                        <p className="text-xs text-slate-500">
-                          尚未建立原料
-                        </p>
+                        <p className="text-xs text-slate-500">尚未建立原料</p>
                       ) : (
                         <select
                           className="block w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm shadow-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
@@ -635,11 +626,7 @@ export default function AppMenuPage() {
                         className="block w-full rounded-md border border-slate-200 px-3 py-2 text-sm shadow-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
                         value={line.quantity}
                         onChange={(e) =>
-                          handleRecipeChange(
-                            index,
-                            "quantity",
-                            e.target.value
-                          )
+                          handleRecipeChange(index, "quantity", e.target.value)
                         }
                       />
                     </div>
@@ -669,12 +656,15 @@ export default function AppMenuPage() {
                   客製化項目（加價、最大數量與額外原料）
                 </p>
                 <p className="text-xs text-slate-500">
-                  例如：「加醬 +10 元，最多 2 份」。這些選項之後可在 POS /
-                  Kiosk 點餐時讓顧客選取並影響金額。
+                  例如：「加醬 +10 元，最多 2 份」。這些選項之後可在 POS / Kiosk
+                  點餐時讓顧客選取並影響金額。
                 </p>
                 <div className="space-y-2">
                   {newItem.customizations.map((c, index) => (
-                    <div key={index} className="space-y-2 rounded-lg border border-slate-100 p-3">
+                    <div
+                      key={index}
+                      className="space-y-2 rounded-lg border border-slate-100 p-3"
+                    >
                       <div className="grid grid-cols-[minmax(0,1.5fr)_minmax(0,1fr)_minmax(0,1fr)_auto] items-end gap-2">
                         <div>
                           <label className="mb-1 block text-xs font-medium text-slate-600">
@@ -876,9 +866,7 @@ export default function AppMenuPage() {
         ) : menuError ? (
           <p className="text-sm text-red-600">{menuError}</p>
         ) : menuItems.length === 0 ? (
-          <p className="text-sm text-slate-500">
-            尚未建立任何今日可販售商品。
-          </p>
+          <p className="text-sm text-slate-500">尚未建立任何今日可販售商品。</p>
         ) : (
           <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
             {menuItems.map((item) => (
@@ -1051,4 +1039,3 @@ export default function AppMenuPage() {
     </div>
   );
 }
-
