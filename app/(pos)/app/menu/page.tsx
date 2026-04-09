@@ -3,6 +3,7 @@
 import type React from "react";
 import { useEffect, useMemo, useState } from "react";
 import { useSession } from "next-auth/react";
+import { FullScreenLoading } from "@/components/ui/FullScreenLoading";
 import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
@@ -117,6 +118,32 @@ export default function AppMenuPage() {
   });
 
   const isManagerOrStaff = role === Role.MANAGER || role === Role.STAFF;
+
+  const loadingOverlay = useMemo(() => {
+    if (saving) {
+      return {
+        open: true as const,
+        title: "儲存中",
+        description: "正在更新菜單，請稍候…",
+      };
+    }
+    if (menuLoading || inventoryLoading) {
+      let description: string;
+      if (menuLoading && inventoryLoading) {
+        description = "正在同步菜單與庫存資料…";
+      } else if (menuLoading) {
+        description = "正在載入菜單品項…";
+      } else {
+        description = "正在載入庫存資料…";
+      }
+      return {
+        open: true as const,
+        title: "載入中",
+        description,
+      };
+    }
+    return { open: false as const, title: "", description: undefined as string | undefined };
+  }, [saving, menuLoading, inventoryLoading]);
 
   useEffect(() => {
     const loadInventory = async () => {
@@ -439,6 +466,11 @@ export default function AppMenuPage() {
 
   return (
     <div className="space-y-6">
+      <FullScreenLoading
+        open={loadingOverlay.open}
+        title={loadingOverlay.title}
+        description={loadingOverlay.description}
+      />
       <h2 className="text-xl font-semibold text-slate-900">
         菜單管理（每日可販售品項）
       </h2>

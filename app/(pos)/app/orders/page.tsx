@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useSession } from "next-auth/react";
 import { Card } from "@/components/ui/Card";
+import { FullScreenLoading } from "@/components/ui/FullScreenLoading";
 import { Role } from "@/lib/types";
 
 type OrderItem = {
@@ -314,6 +315,28 @@ export default function AppOrdersPage() {
     }
   };
 
+  const loadingOverlay = useMemo(() => {
+    if (saving) {
+      return {
+        open: true as const,
+        title: "更新中",
+        description: "正在同步訂單…",
+      };
+    }
+    if (loading) {
+      return {
+        open: true as const,
+        title: "載入中",
+        description: "正在載入訂單列表…",
+      };
+    }
+    return {
+      open: false as const,
+      title: "",
+      description: undefined as string | undefined,
+    };
+  }, [saving, loading]);
+
   if (!canUseOrders) {
     return (
       <Card>
@@ -326,6 +349,11 @@ export default function AppOrdersPage() {
 
   return (
     <div className="space-y-6">
+      <FullScreenLoading
+        open={loadingOverlay.open}
+        title={loadingOverlay.title}
+        description={loadingOverlay.description}
+      />
       <div className="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
         <div>
           <h2 className="text-xl font-semibold text-slate-900">訂單管理</h2>

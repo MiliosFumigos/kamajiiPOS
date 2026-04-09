@@ -1,7 +1,8 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useSession } from "next-auth/react";
+import { FullScreenLoading } from "@/components/ui/FullScreenLoading";
 import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { Role } from "@/lib/types";
@@ -68,6 +69,8 @@ export default function InventoryPage() {
 
     if (role) {
       void load();
+    } else {
+      setLoading(false);
     }
   }, [role]);
 
@@ -129,9 +132,47 @@ export default function InventoryPage() {
   const [demandByIngredient, setDemandByIngredient] = useState<
     Record<string, number>
   >({});
+  const [demandLoading, setDemandLoading] = useState(true);
+
+  const loadingOverlay = useMemo(() => {
+    if (saving) {
+      return {
+        open: true as const,
+        title: "儲存中",
+        description: "正在更新庫存…",
+      };
+    }
+    if (loading && demandLoading) {
+      return {
+        open: true as const,
+        title: "載入中",
+        description: "正在載入庫存與菜單需求資料…",
+      };
+    }
+    if (loading) {
+      return {
+        open: true as const,
+        title: "載入中",
+        description: "正在載入庫存…",
+      };
+    }
+    if (demandLoading) {
+      return {
+        open: true as const,
+        title: "載入中",
+        description: "正在計算菜單需求…",
+      };
+    }
+    return {
+      open: false as const,
+      title: "",
+      description: undefined as string | undefined,
+    };
+  }, [saving, loading, demandLoading]);
 
   useEffect(() => {
     const loadDemand = async () => {
+      setDemandLoading(true);
       try {
         const res = await fetch("/api/menu");
         if (!res.ok) return;
@@ -182,11 +223,15 @@ export default function InventoryPage() {
         setDemandByIngredient(demand);
       } catch (err) {
         console.error(err);
+      } finally {
+        setDemandLoading(false);
       }
     };
 
     if (role) {
       void loadDemand();
+    } else {
+      setDemandLoading(false);
     }
   }, [role]);
 
@@ -237,6 +282,11 @@ export default function InventoryPage() {
 
   return (
     <div className="space-y-6">
+      <FullScreenLoading
+        open={loadingOverlay.open}
+        title={loadingOverlay.title}
+        description={loadingOverlay.description}
+      />
       <h2 className="text-xl font-semibold text-slate-900">原料庫存管理</h2>
 
       {!isManagerOrStaff && (

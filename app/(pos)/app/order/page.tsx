@@ -3,6 +3,7 @@
 import { useSession } from "next-auth/react";
 import { OrderComposer } from "@/components/order/OrderComposer";
 import { Card } from "@/components/ui/Card";
+import { FullScreenLoading } from "@/components/ui/FullScreenLoading";
 import { Role } from "@/lib/types";
 
 export default function AppOrderPage() {
@@ -13,6 +14,11 @@ export default function AppOrderPage() {
   // 固定高度包覆，避免 session 載入前/後切換造成頁面高度位移（CLS）
   return (
     <div className="min-h-[520px] px-2 sm:px-0">
+      <FullScreenLoading
+        open={status === "loading"}
+        title="載入中"
+        description="正在確認登入狀態…"
+      />
       {status === "loading" ? (
         <Card>
           <div className="space-y-3">

@@ -4,6 +4,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
+import { FullScreenLoading } from "@/components/ui/FullScreenLoading";
 
 type CustomizationOption = {
   id: string;
@@ -230,6 +231,24 @@ export function OrderComposer({
     });
   };
 
+  const overlay = useMemo(() => {
+    if (submitting) {
+      return {
+        open: true as const,
+        title: "送出中",
+        description: "正在建立訂單並更新庫存…",
+      };
+    }
+    if (loading) {
+      return {
+        open: true as const,
+        title: "載入中",
+        description: "正在載入菜單…",
+      };
+    }
+    return { open: false as const, title: "", description: undefined as string | undefined };
+  }, [submitting, loading]);
+
   const submit = async () => {
     setSubmitting(true);
     setSubmitError(null);
@@ -283,6 +302,11 @@ export function OrderComposer({
 
   return (
     <div className="space-y-6">
+      <FullScreenLoading
+        open={overlay.open}
+        title={overlay.title}
+        description={overlay.description}
+      />
       <div className="flex flex-col gap-2 md:flex-row md:items-end md:justify-between">
         <div>
           <h2 className="text-xl font-semibold text-slate-900">{title}</h2>

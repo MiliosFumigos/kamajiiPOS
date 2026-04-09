@@ -1,8 +1,9 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useSession } from "next-auth/react";
 import { Card } from "@/components/ui/Card";
+import { FullScreenLoading } from "@/components/ui/FullScreenLoading";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { Role } from "@/lib/types";
@@ -23,7 +24,7 @@ type StaffItem = {
 };
 
 export default function AppStaffPage() {
-  const { data: session } = useSession();
+  const { data: session, status } = useSession();
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -35,7 +36,7 @@ export default function AppStaffPage() {
   const [loading, setLoading] = useState(false);
 
   const [staff, setStaff] = useState<StaffItem[]>([]);
-  const [staffLoading, setStaffLoading] = useState(false);
+  const [staffLoading, setStaffLoading] = useState(true);
   const [staffError, setStaffError] = useState<string | null>(null);
 
   const isOwner = session?.user?.role === Role.OWNER;
@@ -68,6 +69,35 @@ export default function AppStaffPage() {
   useEffect(() => {
     fetchStaff();
   }, []);
+
+  const loadingOverlay = useMemo(() => {
+    if (status === "loading") {
+      return {
+        open: true as const,
+        title: "載入中",
+        description: "正在確認登入狀態…",
+      };
+    }
+    if (loading) {
+      return {
+        open: true as const,
+        title: "處理中",
+        description: "正在建立帳號…",
+      };
+    }
+    if (staffLoading) {
+      return {
+        open: true as const,
+        title: "載入中",
+        description: "正在載入員工列表…",
+      };
+    }
+    return {
+      open: false as const,
+      title: "",
+      description: undefined as string | undefined,
+    };
+  }, [status, loading, staffLoading]);
 
   const handleCreateManager = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -134,6 +164,11 @@ export default function AppStaffPage() {
 
   return (
     <div className="space-y-6">
+      <FullScreenLoading
+        open={loadingOverlay.open}
+        title={loadingOverlay.title}
+        description={loadingOverlay.description}
+      />
       <h2 className="text-xl font-semibold text-slate-900">員工管理</h2>
 
       {isOwner && (

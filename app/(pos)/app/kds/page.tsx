@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useSession } from "next-auth/react";
 import { Card } from "@/components/ui/Card";
+import { FullScreenLoading } from "@/components/ui/FullScreenLoading";
 import { Role } from "@/lib/types";
 
 type OrderItem = {
@@ -252,6 +253,28 @@ export default function AppKdsPage() {
 
   const lastUpdated = useMemo(() => new Date(), [orders]);
 
+  const loadingOverlay = useMemo(() => {
+    if (saving) {
+      return {
+        open: true as const,
+        title: "更新中",
+        description: "正在更新製作狀態…",
+      };
+    }
+    if (loading) {
+      return {
+        open: true as const,
+        title: "載入中",
+        description: "正在載入今日訂單…",
+      };
+    }
+    return {
+      open: false as const,
+      title: "",
+      description: undefined as string | undefined,
+    };
+  }, [saving, loading]);
+
   const Column = ({
     title,
     status,
@@ -427,6 +450,11 @@ export default function AppKdsPage() {
 
   return (
     <div className="relative space-y-5">
+      <FullScreenLoading
+        open={loadingOverlay.open}
+        title={loadingOverlay.title}
+        description={loadingOverlay.description}
+      />
       {toast && (
         <div className="pointer-events-none fixed right-6 top-6 z-50">
           <div className="rounded-2xl border border-slate-200 bg-white px-4 py-3 shadow-lg">
