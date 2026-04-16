@@ -21,7 +21,7 @@ export function ProductCard({
 }: ProductCardProps) {
   return (
     <div className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm transition-shadow hover:shadow-md">
-      <div className="aspect-video bg-slate-100">
+      <div className="aspect-[4/3] bg-slate-100">
         {image ? (
           // eslint-disable-next-line @next/next/no-img-element
           <img

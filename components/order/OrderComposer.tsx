@@ -39,8 +39,8 @@ function formatTime(d: Date) {
 function PlaceholderImage({ name }: { name: string }) {
   const initial = (name?.trim()?.[0] ?? "品").toUpperCase();
   return (
-    <div className="flex h-36 w-full items-center justify-center bg-gradient-to-br from-slate-100 to-slate-200">
-      <div className="flex h-12 w-12 items-center justify-center rounded-full bg-white/70 text-lg font-semibold text-slate-600">
+    <div className="flex h-full w-full items-center justify-center bg-gradient-to-br from-slate-100 to-slate-200">
+      <div className="flex h-11 w-11 items-center justify-center rounded-full bg-white/70 text-base font-semibold text-slate-600 sm:h-12 sm:w-12 sm:text-lg">
         {initial}
       </div>
     </div>
@@ -360,7 +360,7 @@ export function OrderComposer({
           ) : menuItems.length === 0 ? (
             <p className="text-sm text-slate-500">目前沒有可點的品項。</p>
           ) : (
-            <div className="grid gap-4 md:grid-cols-2">
+            <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
               {menuItems.map((item) => {
                 const currentQty = draft[item.id]?.quantity ?? 0;
                 return (
@@ -368,16 +368,18 @@ export function OrderComposer({
                     key={item.id}
                     className="overflow-hidden rounded-xl border border-slate-200 bg-white"
                   >
-                    {item.imageUrl ? (
-                      // eslint-disable-next-line @next/next/no-img-element
-                      <img
-                        src={item.imageUrl}
-                        alt={item.name}
-                        className="h-36 w-full object-cover"
-                      />
-                    ) : (
-                      <PlaceholderImage name={item.name} />
-                    )}
+                    <div className="aspect-[4/3] w-full">
+                      {item.imageUrl ? (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img
+                          src={item.imageUrl}
+                          alt={item.name}
+                          className="h-full w-full object-cover"
+                        />
+                      ) : (
+                        <PlaceholderImage name={item.name} />
+                      )}
+                    </div>
                     <div className="space-y-2 p-4">
                       <div className="flex items-start justify-between gap-3">
                         <div>

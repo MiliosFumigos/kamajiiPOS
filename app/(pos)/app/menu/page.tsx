@@ -1,8 +1,9 @@
 "use client";
 
 import type React from "react";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useSession } from "next-auth/react";
+import Cropper, { type Area } from "react-easy-crop";
 import { FullScreenLoading } from "@/components/ui/FullScreenLoading";
 import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
@@ -39,6 +40,73 @@ type MenuItem = {
   categories: string[];
   customizations: CustomizationOption[];
 };
+
+type PresignResponse = {
+  uploadUrl: string;
+  method: "PUT";
+  headers?: Record<string, string>;
+  key: string;
+  publicUrl: string;
+  expiresIn: number;
+};
+
+type UploadState =
+  | { status: "idle" }
+  | { status: "uploading" }
+  | { status: "success"; publicUrl: string; key: string }
+  | { status: "error"; message: string };
+
+const MAX_IMAGE_FILE_SIZE = 2 * 1024 * 1024;
+const ALLOWED_IMAGE_TYPES = ["image/webp", "image/jpeg", "image/png"] as const;
+const IMAGE_CROP_ASPECT = 4 / 3;
+const DEFAULT_CROP = { x: 0, y: 0 };
+const DEFAULT_ZOOM = 1;
+
+async function createImageElement(src: string): Promise<HTMLImageElement> {
+  return new Promise((resolve, reject) => {
+    const image = new window.Image();
+    image.crossOrigin = "anonymous";
+    image.onload = () => resolve(image);
+    image.onerror = () => reject(new Error("無法讀取圖片，請重新選擇檔案。"));
+    image.src = src;
+  });
+}
+
+async function getCroppedImageBlob(
+  imageSrc: string,
+  crop: Area,
+  mimeType: (typeof ALLOWED_IMAGE_TYPES)[number]
+): Promise<Blob> {
+  const image = await createImageElement(imageSrc);
+  const canvas = document.createElement("canvas");
+  canvas.width = Math.max(1, Math.round(crop.width));
+  canvas.height = Math.max(1, Math.round(crop.height));
+  const ctx = canvas.getContext("2d");
+  if (!ctx) {
+    throw new Error("目前瀏覽器不支援圖片裁切，請改用手動網址。");
+  }
+
+  ctx.drawImage(
+    image,
+    crop.x,
+    crop.y,
+    crop.width,
+    crop.height,
+    0,
+    0,
+    canvas.width,
+    canvas.height
+  );
+
+  const blob = await new Promise<Blob | null>((resolve) => {
+    const quality = mimeType === "image/png" ? undefined : 0.92;
+    canvas.toBlob((file) => resolve(file), mimeType, quality);
+  });
+  if (!blob) {
+    throw new Error("裁切後圖片產生失敗，請重新嘗試。");
+  }
+  return blob;
+}
 
 function MenuPreviewCardSkeleton() {
   return (
@@ -86,6 +154,7 @@ function InventoryDemandCardSkeleton() {
 }
 
 export default function AppMenuPage() {
+  const imageInputRef = useRef<HTMLInputElement | null>(null);
   const { data: session } = useSession();
   const role = session?.user?.role as Role | undefined;
 
@@ -100,6 +169,16 @@ export default function AppMenuPage() {
   const [saving, setSaving] = useState(false);
   const [editingMode, setEditingMode] = useState(false);
   const [categoryInput, setCategoryInput] = useState("");
+  const [uploadState, setUploadState] = useState<UploadState>({ status: "idle" });
+  const [cropModalOpen, setCropModalOpen] = useState(false);
+  const [cropImageSrc, setCropImageSrc] = useState<string | null>(null);
+  const [cropFileName, setCropFileName] = useState("menu-image");
+  const [cropMimeType, setCropMimeType] = useState<
+    (typeof ALLOWED_IMAGE_TYPES)[number]
+  >("image/jpeg");
+  const [cropPosition, setCropPosition] = useState(DEFAULT_CROP);
+  const [cropZoom, setCropZoom] = useState(DEFAULT_ZOOM);
+  const [croppedAreaPixels, setCroppedAreaPixels] = useState<Area | null>(null);
 
   const [newItem, setNewItem] = useState<
     Omit<MenuItem, "id" | "recipe" | "customizations"> & {
@@ -118,6 +197,14 @@ export default function AppMenuPage() {
   });
 
   const isManagerOrStaff = role === Role.MANAGER || role === Role.STAFF;
+
+  useEffect(() => {
+    return () => {
+      if (cropImageSrc?.startsWith("blob:")) {
+        URL.revokeObjectURL(cropImageSrc);
+      }
+    };
+  }, [cropImageSrc]);
 
   const loadingOverlay = useMemo(() => {
     if (saving) {
@@ -378,6 +465,127 @@ export default function AppMenuPage() {
     }));
   };
 
+  const uploadImageFile = async (file: File) => {
+    setUploadState({ status: "uploading" });
+    try {
+      const presignRes = await fetch("/api/uploads/menu-image/presign", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          fileName: file.name,
+          contentType: file.type,
+          fileSize: file.size,
+        }),
+      });
+      const presignData = (await presignRes.json()) as PresignResponse | { error?: string };
+      if (!presignRes.ok || !("uploadUrl" in presignData)) {
+        throw new Error(
+          (presignData as { error?: string })?.error ?? "無法取得上傳網址，請稍後再試。"
+        );
+      }
+
+      const uploadRes = await fetch(presignData.uploadUrl, {
+        method: presignData.method ?? "PUT",
+        headers: {
+          "Content-Type": file.type,
+          ...(presignData.headers ?? {}),
+        },
+        body: file,
+      });
+      if (!uploadRes.ok) {
+        throw new Error("上傳圖片失敗，請稍後再試。");
+      }
+
+      setNewItem((prev) => ({ ...prev, imageUrl: presignData.publicUrl }));
+      setUploadState({
+        status: "success",
+        publicUrl: presignData.publicUrl,
+        key: presignData.key,
+      });
+    } catch (err) {
+      console.error(err);
+      setUploadState({
+        status: "error",
+        message: err instanceof Error ? err.message : "上傳失敗，請改用手動網址或稍後重試。",
+      });
+    }
+  };
+
+  const openCropModalForFile = (file: File) => {
+    if (!ALLOWED_IMAGE_TYPES.includes(file.type as (typeof ALLOWED_IMAGE_TYPES)[number])) {
+      setUploadState({
+        status: "error",
+        message: "僅支援 WebP、JPEG、PNG 圖片格式。",
+      });
+      return;
+    }
+    if (file.size > MAX_IMAGE_FILE_SIZE) {
+      setUploadState({
+        status: "error",
+        message: "圖片需小於或等於 2MB。",
+      });
+      return;
+    }
+
+    if (cropImageSrc?.startsWith("blob:")) {
+      URL.revokeObjectURL(cropImageSrc);
+    }
+    setCropPosition(DEFAULT_CROP);
+    setCropZoom(DEFAULT_ZOOM);
+    setCroppedAreaPixels(null);
+    setCropMimeType(file.type as (typeof ALLOWED_IMAGE_TYPES)[number]);
+    setCropFileName(file.name || "menu-image");
+    setCropImageSrc(URL.createObjectURL(file));
+    setCropModalOpen(true);
+  };
+
+  const closeCropModal = () => {
+    setCropModalOpen(false);
+    if (cropImageSrc?.startsWith("blob:")) {
+      URL.revokeObjectURL(cropImageSrc);
+    }
+    setCropImageSrc(null);
+    setCropPosition(DEFAULT_CROP);
+    setCropZoom(DEFAULT_ZOOM);
+    setCroppedAreaPixels(null);
+  };
+
+  const confirmCropAndUpload = async () => {
+    if (!cropImageSrc || !croppedAreaPixels) {
+      setUploadState({ status: "error", message: "尚未完成裁切，請調整後再試一次。" });
+      return;
+    }
+
+    try {
+      setCropModalOpen(false);
+      setUploadState({ status: "uploading" });
+      const croppedBlob = await getCroppedImageBlob(
+        cropImageSrc,
+        croppedAreaPixels,
+        cropMimeType
+      );
+      if (croppedBlob.size > MAX_IMAGE_FILE_SIZE) {
+        throw new Error("裁切後圖片仍超過 2MB，請縮小範圍或改用較小圖片。");
+      }
+      const extension = cropMimeType === "image/png" ? "png" : cropMimeType === "image/webp" ? "webp" : "jpg";
+      const safeName = cropFileName.replace(/\.[^.]+$/, "");
+      const croppedFile = new File([croppedBlob], `${safeName}-cropped.${extension}`, {
+        type: cropMimeType,
+      });
+      await uploadImageFile(croppedFile);
+      closeCropModal();
+    } catch (err) {
+      console.error(err);
+      setUploadState({
+        status: "error",
+        message:
+          err instanceof Error
+            ? err.message
+            : "裁切或上傳失敗，請重新選圖或改用手動網址。",
+      });
+    }
+  };
+
   const handleCreateMenuItem = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!isManagerOrStaff) return;
@@ -430,6 +638,7 @@ export default function AppMenuPage() {
         customizations: [],
       }));
       setCategoryInput("");
+      setUploadState({ status: "idle" });
     } catch (err) {
       console.error(err);
       setMenuError("儲存菜單失敗，請稍後再試。");
@@ -471,6 +680,64 @@ export default function AppMenuPage() {
         title={loadingOverlay.title}
         description={loadingOverlay.description}
       />
+      {cropModalOpen && cropImageSrc && (
+        <div className="fixed inset-0 z-50 overflow-y-auto bg-slate-900/70 p-4">
+          <div className="flex min-h-full items-center justify-center">
+            <div className="flex w-full max-w-3xl max-h-[calc(100dvh-2rem)] flex-col overflow-hidden rounded-xl bg-white shadow-xl">
+            <div className="border-b border-slate-200 px-4 py-3 sm:px-5">
+              <h3 className="text-sm font-semibold text-slate-900">裁切商品圖片</h3>
+              <p className="mt-1 text-xs text-slate-500">
+                請拖曳與縮放，決定 4:3 顯示區域後再上傳。
+              </p>
+            </div>
+            <div className="overflow-y-auto p-4 sm:p-5">
+              <div className="relative h-[42dvh] min-h-[220px] w-full overflow-hidden rounded-lg bg-slate-100 sm:h-[50dvh] sm:max-h-[420px]">
+                <Cropper
+                  image={cropImageSrc}
+                  crop={cropPosition}
+                  zoom={cropZoom}
+                  aspect={IMAGE_CROP_ASPECT}
+                  onCropChange={setCropPosition}
+                  onZoomChange={setCropZoom}
+                  onCropComplete={(_, pixels) => setCroppedAreaPixels(pixels)}
+                  cropShape="rect"
+                  showGrid
+                />
+              </div>
+              <div className="mt-4 space-y-2">
+                <label className="block text-xs font-medium text-slate-700">縮放</label>
+                <input
+                  type="range"
+                  min={1}
+                  max={3}
+                  step={0.01}
+                  value={cropZoom}
+                  onChange={(e) => setCropZoom(Number(e.target.value))}
+                  className="w-full accent-brand-600"
+                />
+              </div>
+            </div>
+            <div className="flex items-center justify-end gap-2 border-t border-slate-200 px-4 py-3 sm:px-5">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={closeCropModal}
+                disabled={uploadState.status === "uploading"}
+              >
+                取消
+              </Button>
+              <Button
+                type="button"
+                onClick={() => void confirmCropAndUpload()}
+                disabled={uploadState.status === "uploading"}
+              >
+                套用裁切並上傳
+              </Button>
+            </div>
+          </div>
+          </div>
+        </div>
+      )}
       <h2 className="text-xl font-semibold text-slate-900">
         菜單管理（每日可販售品項）
       </h2>
@@ -500,14 +767,74 @@ export default function AppMenuPage() {
                 placeholder="例如：卡士達雞蛋糕"
                 required
               />
-              <Input
-                label="商品圖片網址（暫時）"
-                value={newItem.imageUrl}
-                onChange={(e) =>
-                  setNewItem({ ...newItem, imageUrl: e.target.value })
-                }
-                placeholder="可先貼上圖片 URL，之後再接上傳"
-              />
+              <div className="space-y-2">
+                <label className="mb-1 block min-h-[1.25rem] w-full truncate text-sm font-medium text-slate-700 leading-tight">
+                  商品圖片（點擊預覽即可上傳／更換）
+                </label>
+                <input
+                  ref={imageInputRef}
+                  type="file"
+                  accept="image/webp,image/jpeg,image/png"
+                  className="sr-only"
+                  onChange={(e) => {
+                    const file = e.target.files?.[0];
+                    if (!file) return;
+                    openCropModalForFile(file);
+                    e.currentTarget.value = "";
+                  }}
+                  disabled={uploadState.status === "uploading" || saving}
+                />
+                <button
+                  type="button"
+                  onClick={() => imageInputRef.current?.click()}
+                  disabled={uploadState.status === "uploading" || saving}
+                  className="group block w-full overflow-hidden rounded-lg border border-slate-200 bg-slate-50 text-left transition hover:border-brand-300 hover:shadow-sm disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  <div className="relative aspect-[4/3] w-full bg-slate-100">
+                    {newItem.imageUrl?.trim() ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img
+                        src={newItem.imageUrl}
+                        alt={newItem.name?.trim() || "菜單圖片預覽"}
+                        className="h-full w-full object-cover transition duration-200 group-hover:scale-[1.02]"
+                      />
+                    ) : (
+                      <div className="flex h-full w-full items-center justify-center text-xs text-slate-500">
+                        尚未選擇圖片
+                      </div>
+                    )}
+                    {uploadState.status === "uploading" && (
+                      <div className="absolute inset-0 z-10 flex items-center justify-center bg-slate-900/35">
+                        <div className="h-8 w-8 animate-spin rounded-full border-2 border-white/60 border-t-white" />
+                      </div>
+                    )}
+                  </div>
+                  <div className="flex items-center justify-between gap-2 border-t border-slate-200 bg-white px-3 py-2">
+                    <span className="text-xs text-slate-600">
+                      {uploadState.status === "uploading"
+                        ? "圖片上傳中，請稍候..."
+                        : newItem.imageUrl?.trim()
+                          ? "點擊更換目前圖片"
+                          : "點擊上傳商品圖片"}
+                    </span>
+                    <span className="rounded-md bg-slate-100 px-2 py-1 text-[11px] font-medium text-slate-700">
+                      選擇檔案
+                    </span>
+                  </div>
+                </button>
+                {uploadState.status === "success" && (
+                  <p className="text-xs text-green-700">圖片已上傳，儲存時會使用此圖片。</p>
+                )}
+                {uploadState.status === "error" && (
+                  <p className="text-xs text-red-600">{uploadState.message}</p>
+                )}
+                <Input
+                  label="手動圖片網址（Fallback）"
+                  value={newItem.imageUrl}
+                  onChange={(e) => setNewItem({ ...newItem, imageUrl: e.target.value })}
+                  placeholder="可直接貼上圖片 URL，作為上傳失敗時的備援"
+                />
+              </div>
               <div className="grid grid-cols-2 gap-4">
                 <Input
                   label="售價（元）"
@@ -599,8 +926,16 @@ export default function AppMenuPage() {
                 }
                 required
               />
-              <Button type="submit" className="md:w-auto" disabled={saving}>
-                {saving ? "儲存中..." : "加入今日菜單"}
+              <Button
+                type="submit"
+                className="md:w-auto"
+                disabled={saving || uploadState.status === "uploading"}
+              >
+                {saving
+                  ? "儲存中..."
+                  : uploadState.status === "uploading"
+                    ? "圖片上傳中..."
+                    : "加入今日菜單"}
               </Button>
               {menuError && (
                 <p className="text-xs text-red-600 md:block">{menuError}</p>
@@ -861,8 +1196,16 @@ export default function AppMenuPage() {
 
                 {/* 手機版：把「加入今日菜單」放到客製化項目下面 */}
                 <div className="mt-2 md:hidden">
-                  <Button type="submit" className="w-full" disabled={saving}>
-                    {saving ? "儲存中..." : "加入今日菜單"}
+                  <Button
+                    type="submit"
+                    className="w-full"
+                    disabled={saving || uploadState.status === "uploading"}
+                  >
+                    {saving
+                      ? "儲存中..."
+                      : uploadState.status === "uploading"
+                        ? "圖片上傳中..."
+                        : "加入今日菜單"}
                   </Button>
                   {menuError && (
                     <p className="mt-2 text-xs text-red-600">{menuError}</p>
@@ -890,7 +1233,7 @@ export default function AppMenuPage() {
           )}
         </div>
         {menuLoading ? (
-          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+          <div className="grid gap-4 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4">
             {Array.from({ length: 6 }).map((_, i) => (
               <MenuPreviewCardSkeleton key={i} />
             ))}
@@ -900,23 +1243,25 @@ export default function AppMenuPage() {
         ) : menuItems.length === 0 ? (
           <p className="text-sm text-slate-500">尚未建立任何今日可販售商品。</p>
         ) : (
-          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+          <div className="grid gap-4 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4">
             {menuItems.map((item) => (
               <div
                 key={item.id}
                 className="flex flex-col overflow-hidden rounded-xl border border-slate-200 bg-white"
               >
-                {/* 固定高度圖片區：有/無圖片都維持同高度 */}
-                {item.imageUrl ? (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img
-                    src={item.imageUrl}
-                    alt={item.name}
-                    className="h-32 w-full object-cover"
-                  />
-                ) : (
-                  <div className="h-32 w-full bg-slate-100" />
-                )}
+                {/* 統一 4:3 比例，RWD 下保持一致視覺且避免不同頁面比例跳動 */}
+                <div className="aspect-[4/3] w-full bg-slate-100">
+                  {item.imageUrl ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img
+                      src={item.imageUrl}
+                      alt={item.name}
+                      className="h-full w-full object-cover"
+                    />
+                  ) : (
+                    <div className="h-full w-full bg-slate-100" />
+                  )}
+                </div>
                 <div className="space-y-2 p-4">
                   <div className="flex items-start justify-between gap-2">
                     <div className="min-w-0">
