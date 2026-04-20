@@ -7,6 +7,8 @@ import { OrderComposer } from "@/components/order/OrderComposer";
 export default function KioskPage() {
   const searchParams = useSearchParams();
   const storeId = searchParams.get("storeId") || "";
+  const linePayStatus = searchParams.get("linepay") || "";
+  const linePayOrderId = searchParams.get("orderId") || "";
 
   const menuEndpoint = useMemo(() => {
     const qs = storeId ? `?storeId=${encodeURIComponent(storeId)}` : "";
@@ -23,6 +25,8 @@ export default function KioskPage() {
       title="Kiosk 點餐（免登入）"
       menuEndpoint={menuEndpoint}
       orderEndpoint={orderEndpoint}
+      linePayStatus={linePayStatus}
+      linePayOrderId={linePayOrderId}
     />
   );
 }

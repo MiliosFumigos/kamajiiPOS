@@ -51,10 +51,14 @@ export function OrderComposer({
   title,
   menuEndpoint,
   orderEndpoint = "/api/orders",
+  linePayStatus,
+  linePayOrderId,
 }: {
   title: string;
   menuEndpoint: string;
   orderEndpoint?: string;
+  linePayStatus?: string;
+  linePayOrderId?: string;
 }) {
   const [menuItems, setMenuItems] = useState<MenuItem[]>([]);
   const [loading, setLoading] = useState(true);
@@ -65,6 +69,8 @@ export function OrderComposer({
   // 左側每個商品目前調整中的「草稿選擇」（按下加入後才寫入 cart）
   const [draft, setDraft] = useState<Record<string, CartItem>>({});
   const [submitting, setSubmitting] = useState(false);
+  const [redirectingToLinePay, setRedirectingToLinePay] = useState(false);
+  const [paymentPickerOpen, setPaymentPickerOpen] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [submitDetails, setSubmitDetails] = useState<
     | null
@@ -76,6 +82,7 @@ export function OrderComposer({
       }[]
   >(null);
   const [success, setSuccess] = useState<{
+    id?: string;
     displayId: string;
     placedAt: string;
     total: number;
@@ -232,6 +239,13 @@ export function OrderComposer({
   };
 
   const overlay = useMemo(() => {
+    if (redirectingToLinePay) {
+      return {
+        open: true as const,
+        title: "跳轉 LINE Pay",
+        description: "正在開啟 LINE Pay 付款頁面…",
+      };
+    }
     if (submitting) {
       return {
         open: true as const,
@@ -247,9 +261,9 @@ export function OrderComposer({
       };
     }
     return { open: false as const, title: "", description: undefined as string | undefined };
-  }, [submitting, loading]);
+  }, [redirectingToLinePay, submitting, loading]);
 
-  const submit = async () => {
+  const submitOrder = async () => {
     setSubmitting(true);
     setSubmitError(null);
     setSubmitDetails(null);
@@ -285,18 +299,67 @@ export function OrderComposer({
         return;
       }
 
-      setSuccess({
-        displayId: order.displayId,
-        placedAt: order.placedAt,
-        total: order.total,
-        status: order.status,
-      });
       setCart({});
+      return order;
     } catch (e) {
       console.error(e);
       setSubmitError("送出失敗，請稍後再試。");
+      return null;
     } finally {
       setSubmitting(false);
+    }
+  };
+
+  const storeId = useMemo(() => {
+    const idx = orderEndpoint.indexOf("?");
+    if (idx < 0) return "";
+    const query = orderEndpoint.slice(idx + 1);
+    return new URLSearchParams(query).get("storeId") || "";
+  }, [orderEndpoint]);
+
+  const submitCash = async () => {
+    const order = await submitOrder();
+    if (!order?.displayId) return;
+    setSuccess({
+      id: order.id,
+      displayId: order.displayId,
+      placedAt: order.placedAt,
+      total: order.total,
+      status: order.status,
+    });
+    setPaymentPickerOpen(false);
+  };
+
+  const submitLinePay = async () => {
+    const order = await submitOrder();
+    if (!order?.id) return;
+    setSuccess({
+      id: order.id,
+      displayId: order.displayId,
+      placedAt: order.placedAt,
+      total: order.total,
+      status: "等待 LINE Pay 付款",
+    });
+    setPaymentPickerOpen(false);
+
+    try {
+      setRedirectingToLinePay(true);
+      const res = await fetch("/api/payments/linepay/request", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ orderId: order.id, storeId }),
+      });
+      const data = (await res.json()) as any;
+      if (!res.ok || !data?.paymentUrl) {
+        setSubmitError(data?.error || "啟動 LINE Pay 失敗");
+        setRedirectingToLinePay(false);
+        return;
+      }
+      window.location.href = data.paymentUrl;
+    } catch (error) {
+      console.error(error);
+      setSubmitError("啟動 LINE Pay 失敗，請稍後再試。");
+      setRedirectingToLinePay(false);
     }
   };
 
@@ -350,6 +413,22 @@ export function OrderComposer({
           </div>
         </Card>
       </div>
+
+      {linePayStatus === "success" && (
+        <div className="rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700">
+          LINE Pay 付款成功{linePayOrderId ? `（訂單 ${linePayOrderId}）` : ""}。
+        </div>
+      )}
+      {linePayStatus === "failed" && (
+        <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+          LINE Pay 付款失敗，請重新下單或改用現金支付。
+        </div>
+      )}
+      {linePayStatus === "cancelled" && (
+        <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-700">
+          你已取消 LINE Pay 付款，若要完成訂單請重新操作。
+        </div>
+      )}
 
       <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_360px]">
         <Card title="菜單">
@@ -600,15 +679,41 @@ export function OrderComposer({
 
               <Button
                 className="w-full"
-                onClick={submit}
+                onClick={() => setPaymentPickerOpen(true)}
                 disabled={submitting || cartItems.length === 0}
               >
-                {submitting ? "送出中..." : "送出訂單（扣庫存）"}
+                {submitting ? "送出中..." : "送出訂單"}
               </Button>
             </div>
           )}
         </Card>
       </div>
+
+      {paymentPickerOpen && (
+        <div className="fixed inset-0 z-40 flex items-center justify-center bg-slate-900/50 p-4">
+          <div className="w-full max-w-md rounded-xl bg-white p-5 shadow-xl">
+            <h3 className="text-lg font-semibold text-slate-900">選擇付款方式</h3>
+            <p className="mt-1 text-sm text-slate-600">
+              請選擇這筆訂單要使用的付款方式。
+            </p>
+            <div className="mt-5 grid gap-2">
+              <Button onClick={submitCash} disabled={submitting}>
+                現金支付
+              </Button>
+              <Button variant="outline" onClick={submitLinePay} disabled={submitting}>
+                LINE Pay
+              </Button>
+              <Button
+                variant="ghost"
+                onClick={() => setPaymentPickerOpen(false)}
+                disabled={submitting}
+              >
+                取消
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
