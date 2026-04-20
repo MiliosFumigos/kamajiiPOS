@@ -1,9 +1,11 @@
 "use client";
 
+import { useState } from "react";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { signOut } from "next-auth/react";
 import { HiChevronDoubleLeft, HiChevronDoubleRight } from "react-icons/hi";
+import { toast } from "sonner";
 
 interface SidebarProps {
   brandName: string;
@@ -36,6 +38,8 @@ export function Sidebar({
   onToggleDesktopCollapse,
 }: SidebarProps) {
   const pathname = usePathname();
+  const router = useRouter();
+  const [isSigningOut, setIsSigningOut] = useState(false);
 
   const links =
     userRole === "OWNER"
@@ -57,6 +61,25 @@ export function Sidebar({
 
   const handleNav = () => {
     onCloseMobile();
+  };
+
+  const handleSignOut = async () => {
+    if (isSigningOut) return;
+    setIsSigningOut(true);
+
+    try {
+      const signOutTask = signOut({ callbackUrl: "/", redirect: false });
+      await toast.promise(signOutTask, {
+        loading: "登出中...",
+        success: "已登出",
+        error: "登出失敗，請稍後再試",
+      });
+      const result = await signOutTask;
+      router.push(result?.url || "/");
+      router.refresh();
+    } catch {
+      setIsSigningOut(false);
+    }
   };
 
   return (
@@ -144,12 +167,13 @@ export function Sidebar({
           </span>
         </button>
         <button
-          onClick={() => signOut({ callbackUrl: "/" })}
+          onClick={handleSignOut}
+          disabled={isSigningOut}
           className={`w-full rounded-lg text-sm text-slate-600 group hover:bg-slate-50  ${
             desktopCollapsed
               ? "px-4 py-2 text-left md:px-1 md:text-center "
               : "px-4 py-2 text-center"
-          }`}
+          } ${isSigningOut ? "cursor-not-allowed opacity-70" : ""}`}
           title="登出"
         >
           {desktopCollapsed ? (

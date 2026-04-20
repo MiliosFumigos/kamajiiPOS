@@ -1,7 +1,11 @@
 import { NextAuthOptions } from "next-auth";
 import CredentialsProvider from "next-auth/providers/credentials";
 import bcrypt from "bcryptjs";
-import { prisma } from "@/lib/prisma";
+import {
+  isPrismaConnectivityError,
+  prisma,
+  withPrismaRetry,
+} from "@/lib/prisma";
 import { Role } from "@/lib/types";
 
 function getSharedCookieDomain(): string | undefined {
@@ -147,16 +151,28 @@ export const authOptions: NextAuthOptions = {
           ? { ...baseWhere, brand: { subdomain } }
           : baseWhere;
 
-        let user = await prisma.user.findFirst({
-          where: whereWithSubdomain,
-          include: { brand: true },
-        });
+        let user = null;
+        try {
+          user = await withPrismaRetry(() =>
+            prisma.user.findFirst({
+              where: whereWithSubdomain,
+              include: { brand: true },
+            }),
+          );
 
-        if (!user && subdomain) {
-          user = await prisma.user.findFirst({
-            where: baseWhere,
-            include: { brand: true },
-          });
+          if (!user && subdomain) {
+            user = await withPrismaRetry(() =>
+              prisma.user.findFirst({
+                where: baseWhere,
+                include: { brand: true },
+              }),
+            );
+          }
+        } catch (error) {
+          if (isPrismaConnectivityError(error)) {
+            throw new Error("服務喚醒中，請 1-2 秒後再試一次");
+          }
+          throw error;
         }
 
         if (!user || !user.password) {

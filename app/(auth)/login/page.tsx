@@ -4,6 +4,7 @@ import { Suspense, useState, useEffect } from "react";
 import { signIn, getSession } from "next-auth/react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
+import { toast } from "sonner";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { Card } from "@/components/ui/Card";
@@ -29,37 +30,57 @@ function LoginForm() {
     setSubdomain(getBrandFromPath());
   }, []);
 
+  const mapLoginError = (message?: string | null) => {
+    if (!message) return "登入失敗，請稍後再試";
+    if (message === "CredentialsSignin") return "帳號或密碼不正確";
+    return message;
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError("");
     setLoading(true);
 
     try {
-      const result = await signIn("credentials", {
-        email,
-        password,
-        subdomain: subdomain || undefined,
-        redirect: false,
-      });
+      const loginTask = async () => {
+        const result = await signIn("credentials", {
+          email,
+          password,
+          subdomain: subdomain || undefined,
+          redirect: false,
+        });
 
-      if (result?.error) {
-        setError(result.error);
-        setLoading(false);
-        return;
-      }
+        if (result?.error) {
+          throw new Error(mapLoginError(result.error));
+        }
 
-      // 若有品牌 subdomain，導向該品牌的 app dashboard（避免根網域受品牌路由限制）
-      const session = await getSession();
-      if (session?.user?.brandSubdomain) {
-        router.push(`/${session.user.brandSubdomain}/app/dashboard`);
+        // 若有品牌 subdomain，導向該品牌的 app dashboard（避免根網域受品牌路由限制）
+        const session = await getSession();
+        if (session?.user?.brandSubdomain) {
+          router.push(`/${session.user.brandSubdomain}/app/dashboard`);
+          router.refresh();
+          return;
+        }
+
+        router.push(callbackUrl);
         router.refresh();
-        return;
-      }
+      };
 
-      router.push(callbackUrl);
-      router.refresh();
+      await toast.promise(loginTask(), {
+        loading: "登入中...",
+        success: "登入成功",
+        error: (err) => {
+          const msg =
+            err instanceof Error
+              ? mapLoginError(err.message)
+              : "登入失敗，請稍後再試";
+          setError(msg);
+          return msg;
+        },
+      });
     } catch {
-      setError("登入失敗，請稍後再試");
+      // 錯誤訊息由 toast.promise 的 error callback 統一處理
+    } finally {
       setLoading(false);
     }
   };
