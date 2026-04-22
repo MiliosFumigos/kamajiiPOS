@@ -28,7 +28,18 @@ type MenuItemInput = {
   customizations?: CustomizationInput[];
 };
 
-function mapMenuItems(items: {
+function startOfDayUTC(d: Date) {
+  return new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate()));
+}
+
+function nextDayUTC(d: Date) {
+  return new Date(
+    Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate() + 1)
+  );
+}
+
+function mapMenuItems(
+  items: {
   id: string;
   name: string;
   price: number;
@@ -44,8 +55,16 @@ function mapMenuItems(items: {
     maxQuantity: number;
     extraRecipeLines: { ingredientId: string; quantity: number }[];
   }[];
-}[]) {
+  }[],
+  soldByMenuId: Map<string, number> = new Map()
+) {
   return items.map((item) => ({
+    soldToday: soldByMenuId.get(item.id) ?? 0,
+    remainingToday: Math.max(
+      0,
+      item.dailyLimit - (soldByMenuId.get(item.id) ?? 0)
+    ),
+    soldOut: Math.max(0, item.dailyLimit - (soldByMenuId.get(item.id) ?? 0)) <= 0,
     id: item.id,
     name: item.name,
     price: item.price,
@@ -116,7 +135,31 @@ export async function GET() {
     orderBy: { createdAt: "asc" },
   });
 
-  return NextResponse.json({ items: mapMenuItems(items) });
+  const soldByMenuId = new Map<string, number>();
+  if (items.length > 0) {
+    const now = new Date();
+    const dayStart = startOfDayUTC(now);
+    const dayEnd = nextDayUTC(now);
+    const soldRows = await prisma.orderItem.groupBy({
+      by: ["menuItemId"],
+      where: {
+        menuItemId: { in: items.map((item) => item.id) },
+        order: {
+          storeId,
+          placedAt: { gte: dayStart, lt: dayEnd },
+          status: { not: "CANCELLED" as any },
+        },
+      },
+      _sum: {
+        quantity: true,
+      },
+    });
+    for (const row of soldRows) {
+      soldByMenuId.set(row.menuItemId, row._sum.quantity ?? 0);
+    }
+  }
+
+  return NextResponse.json({ items: mapMenuItems(items, soldByMenuId) });
 }
 
 export async function POST(request: Request) {

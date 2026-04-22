@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { FullScreenLoading } from "@/components/ui/FullScreenLoading";
@@ -22,6 +22,9 @@ type MenuItem = {
   imageUrl?: string;
   categories: string[];
   customizations: CustomizationOption[];
+  soldToday?: number;
+  remainingToday?: number;
+  soldOut?: boolean;
 };
 
 type CartItem = {
@@ -100,25 +103,26 @@ export function OrderComposer({
     status: string;
   } | null>(null);
 
-  useEffect(() => {
-    const load = async () => {
-      setLoading(true);
-      setError(null);
-      try {
-        const res = await fetch(menuEndpoint);
-        if (!res.ok) throw new Error("載入菜單失敗");
-        const data = (await res.json()) as { items: MenuItem[] };
-        setMenuItems(data.items ?? []);
-      } catch (e) {
-        console.error(e);
-        setError("無法載入菜單，請稍後再試。");
-        setMenuItems([]);
-      } finally {
-        setLoading(false);
-      }
-    };
-    void load();
+  const loadMenu = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const res = await fetch(menuEndpoint);
+      if (!res.ok) throw new Error("載入菜單失敗");
+      const data = (await res.json()) as { items: MenuItem[] };
+      setMenuItems(data.items ?? []);
+    } catch (e) {
+      console.error(e);
+      setError("無法載入菜單，請稍後再試。");
+      setMenuItems([]);
+    } finally {
+      setLoading(false);
+    }
   }, [menuEndpoint]);
+
+  useEffect(() => {
+    void loadMenu();
+  }, [loadMenu]);
 
   const cartItems = useMemo(
     () =>
@@ -153,6 +157,14 @@ export function OrderComposer({
       setSelectedCategory("ALL");
     }
   }, [categoryOptions, selectedCategory]);
+
+  const cartQtyByMenuId = useMemo(() => {
+    const m = new Map<string, number>();
+    for (const item of cartItems) {
+      m.set(item.menuItemId, (m.get(item.menuItemId) ?? 0) + item.quantity);
+    }
+    return m;
+  }, [cartItems]);
 
   const totals = useMemo(() => {
     const menuMap = new Map(menuItems.map((m) => [m.id, m]));
@@ -217,10 +229,12 @@ export function OrderComposer({
     return menuItems.find((m) => m.id === customizeModal.menuItemId) ?? null;
   }, [customizeModal.menuItemId, menuItems]);
 
-  const setQty = (menuItemId: string, quantity: number) => {
+  const setQty = (menuItemId: string, quantity: number, maxAllowed?: number) => {
     setDraft((prev) => {
       const next = { ...prev };
-      const q = Math.max(0, Math.floor(quantity));
+      const boundedMax =
+        typeof maxAllowed === "number" ? Math.max(0, Math.floor(maxAllowed)) : Infinity;
+      const q = Math.max(0, Math.min(Math.floor(quantity), boundedMax));
       if (q <= 0) {
         delete next[menuItemId];
         return next;
@@ -233,6 +247,21 @@ export function OrderComposer({
       next[menuItemId] = { ...existing, quantity: q };
       return next;
     });
+  };
+
+  const setQtyFromInput = (
+    menuItemId: string,
+    rawValue: string,
+    maxAllowed?: number
+  ) => {
+    const value = rawValue.trim();
+    if (value === "") {
+      setQty(menuItemId, 0, maxAllowed);
+      return;
+    }
+    const parsed = Number(value);
+    if (!Number.isFinite(parsed)) return;
+    setQty(menuItemId, parsed, maxAllowed);
   };
 
   const openCustomizeModal = (menuItemId: string) => {
@@ -272,7 +301,20 @@ export function OrderComposer({
   const confirmAddToCart = () => {
     const { menuItemId, quantity, customizations } = customizeModal;
     if (!menuItemId || quantity <= 0) return;
-    const menuName = menuItems.find((m) => m.id === menuItemId)?.name ?? "商品";
+    const targetMenu = menuItems.find((m) => m.id === menuItemId);
+    const menuName = targetMenu?.name ?? "商品";
+    const existingQty = Object.values(cart)
+      .filter((c) => c.menuItemId === menuItemId)
+      .reduce((acc, cur) => acc + cur.quantity, 0);
+    const remainingToday =
+      typeof targetMenu?.remainingToday === "number"
+        ? Math.max(0, targetMenu.remainingToday)
+        : Number.MAX_SAFE_INTEGER;
+    const maxAddable = Math.max(0, remainingToday - existingQty);
+    if (quantity > maxAddable) {
+      toast.error(maxAddable <= 0 ? `${menuName} 今日已售完` : `最多可再加入 ${maxAddable} 份`);
+      return;
+    }
 
     const keyParts = Object.entries(customizations)
       .filter(([, q]) => (q || 0) > 0)
@@ -386,6 +428,8 @@ export function OrderComposer({
         status: order.status,
       });
       setCart({});
+      setDraft({});
+      await loadMenu();
     } catch (e) {
       console.error(e);
       const message = e instanceof Error ? e.message : "送出失敗，請稍後再試。";
@@ -526,10 +570,21 @@ export function OrderComposer({
                 <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
                   {visibleMenuItems.map((item) => {
                     const currentQty = draft[item.id]?.quantity ?? 0;
+                    const cartQty = cartQtyByMenuId.get(item.id) ?? 0;
+                    const remainingToday =
+                      typeof item.remainingToday === "number"
+                        ? Math.max(0, item.remainingToday)
+                        : Number.MAX_SAFE_INTEGER;
+                    const availableForDraft = Math.max(0, remainingToday - cartQty);
+                    const soldOut = item.soldOut === true || remainingToday <= 0;
                     return (
                       <div
                         key={item.id}
-                        className="overflow-hidden rounded-xl border border-slate-200 bg-white"
+                        className={`overflow-hidden rounded-xl border ${
+                          soldOut
+                            ? "border-rose-200 bg-rose-50/40 opacity-75"
+                            : "border-slate-200 bg-white"
+                        }`}
                       >
                         <div className="aspect-[4/3] w-full">
                           {item.imageUrl ? (
@@ -552,6 +607,15 @@ export function OrderComposer({
                               <p className="text-xs text-slate-500">
                                 約 {item.prepMinutes} 分鐘／份 · 今日上限{" "}
                                 {item.dailyLimit} 份
+                              </p>
+                              <p
+                                className={`text-xs ${
+                                  soldOut ? "font-semibold text-rose-600" : "text-emerald-700"
+                                }`}
+                              >
+                                {soldOut
+                                  ? "今日已售完"
+                                  : `今日剩餘 ${Math.max(0, remainingToday)} 份`}
                               </p>
                               <div className="mt-1 min-h-[22px]">
                                 {item.categories?.length > 0 ? (
@@ -585,18 +649,36 @@ export function OrderComposer({
                               <Button
                                 variant="outline"
                                 size="sm"
-                                onClick={() => setQty(item.id, currentQty - 1)}
+                                onClick={() =>
+                                  setQty(item.id, currentQty - 1, availableForDraft)
+                                }
                                 disabled={currentQty <= 0}
                               >
                                 -
                               </Button>
-                              <span className="w-8 text-center text-sm font-medium">
-                                {currentQty}
-                              </span>
+                              <input
+                                type="text"
+                                inputMode="numeric"
+                                pattern="[0-9]*"
+                                value={currentQty}
+                                onChange={(e) =>
+                                  setQtyFromInput(
+                                    item.id,
+                                    e.target.value.replace(/\D/g, ""),
+                                    availableForDraft
+                                  )
+                                }
+                                disabled={soldOut}
+                                className="h-9 w-16 rounded-md border border-slate-200 bg-white px-2 text-center text-sm font-medium text-slate-800 outline-none ring-offset-0 focus:border-brand-500 focus:ring-2 focus:ring-brand-500"
+                                aria-label={`${item.name} 數量`}
+                              />
                               <Button
                                 variant="outline"
                                 size="sm"
-                                onClick={() => setQty(item.id, currentQty + 1)}
+                                onClick={() =>
+                                  setQty(item.id, currentQty + 1, availableForDraft)
+                                }
+                                disabled={soldOut || currentQty >= availableForDraft}
                               >
                                 +
                               </Button>
@@ -604,9 +686,9 @@ export function OrderComposer({
                             <Button
                               size="sm"
                               onClick={() => openCustomizeModal(item.id)}
-                              disabled={currentQty <= 0}
+                              disabled={currentQty <= 0 || soldOut}
                             >
-                              加入
+                              {soldOut ? "售完" : "加入"}
                             </Button>
                           </div>
                         </div>

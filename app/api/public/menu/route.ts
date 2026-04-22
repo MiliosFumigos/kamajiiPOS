@@ -1,46 +1,66 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 
-function mapMenuItems(items: {
-  id: string;
-  name: string;
-  price: number;
-  dailyLimit: number;
-  prepMinutes: number;
-  imageUrl: string | null;
-  categories: string[];
-  recipeLines: { ingredientId: string; quantity: number }[];
-  customizations: {
+function startOfDayUTC(d: Date) {
+  return new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate()));
+}
+
+function nextDayUTC(d: Date) {
+  return new Date(
+    Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate() + 1)
+  );
+}
+
+function mapItemsWithAvailability(
+  items: {
     id: string;
-    label: string;
-    priceDelta: number;
-    maxQuantity: number;
-    extraRecipeLines: { ingredientId: string; quantity: number }[];
-  }[];
-}[]) {
-  return items.map((item) => ({
-    id: item.id,
-    name: item.name,
-    price: item.price,
-    dailyLimit: item.dailyLimit,
-    prepMinutes: item.prepMinutes,
-    imageUrl: item.imageUrl ?? undefined,
-    categories: item.categories ?? [],
-    recipe: item.recipeLines.map((r) => ({
-      ingredientId: r.ingredientId,
-      quantity: r.quantity,
-    })),
-    customizations: item.customizations.map((c) => ({
-      id: c.id,
-      label: c.label,
-      priceDelta: c.priceDelta,
-      maxQuantity: c.maxQuantity,
-      recipe: c.extraRecipeLines.map((r) => ({
+    name: string;
+    price: number;
+    dailyLimit: number;
+    prepMinutes: number;
+    imageUrl: string | null;
+    categories: string[];
+    recipeLines: { ingredientId: string; quantity: number }[];
+    customizations: {
+      id: string;
+      label: string;
+      priceDelta: number;
+      maxQuantity: number;
+      extraRecipeLines: { ingredientId: string; quantity: number }[];
+    }[];
+  }[],
+  soldByMenuId: Map<string, number>
+) {
+  return items.map((item) => {
+    const soldToday = soldByMenuId.get(item.id) ?? 0;
+    const remainingToday = Math.max(0, item.dailyLimit - soldToday);
+    return {
+      id: item.id,
+      name: item.name,
+      price: item.price,
+      dailyLimit: item.dailyLimit,
+      prepMinutes: item.prepMinutes,
+      imageUrl: item.imageUrl ?? undefined,
+      categories: item.categories ?? [],
+      recipe: item.recipeLines.map((r) => ({
         ingredientId: r.ingredientId,
         quantity: r.quantity,
       })),
-    })),
-  }));
+      customizations: item.customizations.map((c) => ({
+        id: c.id,
+        label: c.label,
+        priceDelta: c.priceDelta,
+        maxQuantity: c.maxQuantity,
+        recipe: c.extraRecipeLines.map((r) => ({
+          ingredientId: r.ingredientId,
+          quantity: r.quantity,
+        })),
+      })),
+      soldToday,
+      remainingToday,
+      soldOut: remainingToday <= 0,
+    };
+  });
 }
 
 /**
@@ -89,6 +109,33 @@ export async function GET(request: Request) {
     orderBy: { createdAt: "asc" },
   });
 
-  return NextResponse.json({ items: mapMenuItems(items) });
+  const menuItemIds = items.map((i) => i.id);
+  const soldByMenuId = new Map<string, number>();
+  if (menuItemIds.length > 0) {
+    const now = new Date();
+    const dayStart = startOfDayUTC(now);
+    const dayEnd = nextDayUTC(now);
+    const soldRows = await prisma.orderItem.groupBy({
+      by: ["menuItemId"],
+      where: {
+        menuItemId: { in: menuItemIds },
+        order: {
+          storeId: store.id,
+          placedAt: { gte: dayStart, lt: dayEnd },
+          status: { not: "CANCELLED" as any },
+        },
+      },
+      _sum: {
+        quantity: true,
+      },
+    });
+    for (const row of soldRows) {
+      soldByMenuId.set(row.menuItemId, row._sum.quantity ?? 0);
+    }
+  }
+
+  return NextResponse.json({
+    items: mapItemsWithAvailability(items, soldByMenuId),
+  });
 }
 
