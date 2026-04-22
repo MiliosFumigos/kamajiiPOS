@@ -23,6 +23,8 @@ export default function KioskPage() {
       title="Kiosk 點餐（免登入）"
       menuEndpoint={menuEndpoint}
       orderEndpoint={orderEndpoint}
+      showLatestOrderSummary={false}
+      categoryFilterSidebar
     />
   );
 }
