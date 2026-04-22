@@ -308,6 +308,7 @@ export async function POST(request: Request) {
 
       // 5) 扣庫存（條件式 updateMany，避免扣到負數）
       const insufficient: { ingredientId: string; needed: number }[] = [];
+      const deducted: { ingredientId: string; quantity: number }[] = [];
       for (const [ingredientId, needed] of Array.from(requiredByIngredient.entries())) {
         if (needed <= 0) continue;
         const updated = await tx.inventory.updateMany({
@@ -321,15 +322,17 @@ export async function POST(request: Request) {
         });
         if (updated.count !== 1) {
           insufficient.push({ ingredientId, needed });
+        } else {
+          deducted.push({ ingredientId, quantity: needed });
         }
       }
       if (insufficient.length > 0) {
-        // 把已扣的補回去（同一個 transaction 內）
-        for (const [ingredientId, needed] of Array.from(requiredByIngredient.entries())) {
-          if (needed <= 0) continue;
+        // 僅把本次交易中「已成功扣減」的數量補回去，避免誤增未扣成功的原料。
+        for (const { ingredientId, quantity } of deducted) {
+          if (quantity <= 0) continue;
           await tx.inventory.updateMany({
             where: { brandId, storeId, ingredientId },
-            data: { quantity: { increment: needed } },
+            data: { quantity: { increment: quantity } },
           });
         }
 
@@ -692,8 +695,15 @@ export async function PATCH(request: Request) {
     return NextResponse.json({ error: "不支援的付款狀態" }, { status: 400 });
   }
 
+  const storeId = session.user.storeId;
+  if (!storeId) {
+    return new NextResponse("Store not found for user", { status: 400 });
+  }
+
+  const scopedOrderWhere = { id: orderId, brandId, storeId };
+
   const order = await prisma.order.findFirst({
-    where: { id: orderId, brandId },
+    where: scopedOrderWhere,
     select: {
       id: true,
       storeId: true,
@@ -775,7 +785,7 @@ export async function PATCH(request: Request) {
   }
 
   const updated = await prisma.order.findFirst({
-    where: { id: order.id, brandId },
+    where: { id: order.id, brandId, storeId },
     select: {
       id: true,
       displayId: true,

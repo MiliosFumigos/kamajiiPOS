@@ -129,6 +129,7 @@ export const authOptions: NextAuthOptions = {
         if (!credentials?.email || !credentials?.password) {
           throw new Error("請輸入電子信箱和密碼");
         }
+        const normalizedEmail = String(credentials.email).trim();
 
         // 僅在有「有效子網域」時才限定品牌；localhost 登入時 subdomain 可能為 undefined 或字串 "undefined"
         const subdomain =
@@ -139,14 +140,11 @@ export const authOptions: NextAuthOptions = {
             : null;
 
         const baseWhere = {
-          email: credentials.email,
+          email: { equals: normalizedEmail, mode: "insensitive" as const },
           role: { in: [Role.OWNER, Role.MANAGER, Role.STAFF] },
         };
 
-        // Path-based 多租戶下，URL 的 brand 片段可能跟 DB 的 brand.subdomain
-        // 不完全一致（例如字串規則/使用者輸入差異）。
-        // 這會導致查不到 user 直接 401。為了讓「註冊後登入」穩定，
-        // 先用 subdomain 查；找不到時回退只用 email 查。
+        // 多租戶安全性：有 subdomain 時必須限制在該品牌，不做跨品牌 fallback。
         const whereWithSubdomain = subdomain
           ? { ...baseWhere, brand: { subdomain } }
           : baseWhere;
@@ -160,14 +158,6 @@ export const authOptions: NextAuthOptions = {
             }),
           );
 
-          if (!user && subdomain) {
-            user = await withPrismaRetry(() =>
-              prisma.user.findFirst({
-                where: baseWhere,
-                include: { brand: true },
-              }),
-            );
-          }
         } catch (error) {
           if (isPrismaConnectivityError(error)) {
             throw new Error("服務喚醒中，請 1-2 秒後再試一次");

@@ -13,8 +13,24 @@ import { Card } from "@/components/ui/Card";
 function getBrandFromPath(): string | null {
   if (typeof window === "undefined") return null;
   const parts = window.location.pathname.split("/").filter(Boolean);
-  return parts.length >= 1 ? parts[0] : null;
+  if (parts.length === 0) return null;
+
+  const rootRoutes = new Set(["login", "register", "app", "kiosk", "menu", "cart"]);
+  if (parts.length === 1 && rootRoutes.has(parts[0])) return null;
+
+  if (parts.length >= 2 && (parts[1] === "login" || parts[1] === "register")) {
+    return parts[0];
+  }
+
+  return null;
 }
+
+type BrandOption = {
+  brandId: string;
+  brandName: string;
+  subdomain: string;
+  role: string;
+};
 
 function LoginForm() {
   const router = useRouter();
@@ -25,6 +41,8 @@ function LoginForm() {
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+  const [brandOptions, setBrandOptions] = useState<BrandOption[]>([]);
+  const [brandModalOpen, setBrandModalOpen] = useState(false);
 
   useEffect(() => {
     setSubdomain(getBrandFromPath());
@@ -36,6 +54,46 @@ function LoginForm() {
     return message;
   };
 
+  const completeLogin = async (targetSubdomain?: string) => {
+    const result = await signIn("credentials", {
+      email,
+      password,
+      subdomain: targetSubdomain || undefined,
+      redirect: false,
+    });
+
+    if (result?.error) {
+      throw new Error(mapLoginError(result.error));
+    }
+
+    const session = await getSession();
+    if (session?.user?.brandSubdomain) {
+      router.push(`/${session.user.brandSubdomain}/app/dashboard`);
+      router.refresh();
+      return;
+    }
+
+    router.push(callbackUrl);
+    router.refresh();
+  };
+
+  const resolveBrandOptions = async (): Promise<BrandOption[]> => {
+    const response = await fetch("/api/auth/brand-options", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email, password }),
+    });
+
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      throw new Error(
+        typeof data?.error === "string" ? data.error : "帳號或密碼不正確"
+      );
+    }
+
+    return Array.isArray(data?.options) ? data.options : [];
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError("");
@@ -43,27 +101,24 @@ function LoginForm() {
 
     try {
       const loginTask = async () => {
-        const result = await signIn("credentials", {
-          email,
-          password,
-          subdomain: subdomain || undefined,
-          redirect: false,
-        });
-
-        if (result?.error) {
-          throw new Error(mapLoginError(result.error));
-        }
-
-        // 若有品牌 subdomain，導向該品牌的 app dashboard（避免根網域受品牌路由限制）
-        const session = await getSession();
-        if (session?.user?.brandSubdomain) {
-          router.push(`/${session.user.brandSubdomain}/app/dashboard`);
-          router.refresh();
+        if (subdomain) {
+          await completeLogin(subdomain);
           return;
         }
 
-        router.push(callbackUrl);
-        router.refresh();
+        const options = await resolveBrandOptions();
+        if (options.length === 1) {
+          await completeLogin(options[0].subdomain);
+          return;
+        }
+
+        if (options.length > 1) {
+          setBrandOptions(options);
+          setBrandModalOpen(true);
+          return;
+        }
+
+        throw new Error("找不到可登入的品牌");
       };
 
       await toast.promise(loginTask(), {
@@ -125,6 +180,69 @@ function LoginForm() {
           </p>
         </form>
       </Card>
+
+      {brandModalOpen && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4"
+          role="dialog"
+          aria-modal="true"
+        >
+          <Card className="w-full max-w-md">
+            <div className="space-y-3">
+              <h2 className="text-lg font-semibold text-slate-900">選擇登入品牌</h2>
+              <p className="text-sm text-slate-600">
+                這組帳號在多個品牌都有權限，請選擇這次要進入的品牌。
+              </p>
+              <div className="space-y-2">
+                {brandOptions.map((option) => (
+                  <button
+                    key={option.brandId}
+                    type="button"
+                    className="w-full rounded-lg border border-slate-200 px-3 py-2 text-left hover:bg-slate-50"
+                    onClick={async () => {
+                      setError("");
+                      setLoading(true);
+                      try {
+                        await toast.promise(completeLogin(option.subdomain), {
+                          loading: "登入中...",
+                          success: `已登入 ${option.brandName}`,
+                          error: (err) => {
+                            const msg =
+                              err instanceof Error
+                                ? mapLoginError(err.message)
+                                : "登入失敗，請稍後再試";
+                            setError(msg);
+                            return msg;
+                          },
+                        });
+                        setBrandModalOpen(false);
+                      } catch {
+                        // 錯誤訊息由 toast.promise callback 處理
+                      } finally {
+                        setLoading(false);
+                      }
+                    }}
+                    disabled={loading}
+                  >
+                    <p className="font-medium text-slate-900">{option.brandName}</p>
+                    <p className="text-xs text-slate-500">/{option.subdomain}</p>
+                  </button>
+                ))}
+              </div>
+              <div className="flex justify-end">
+                <Button
+                  variant="outline"
+                  type="button"
+                  onClick={() => setBrandModalOpen(false)}
+                  disabled={loading}
+                >
+                  取消
+                </Button>
+              </div>
+            </div>
+          </Card>
+        </div>
+      )}
     </main>
   );
 }
