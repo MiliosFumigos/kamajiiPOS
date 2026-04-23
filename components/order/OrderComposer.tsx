@@ -40,6 +40,8 @@ type CustomizeModalState = {
   customizations: Record<string, number>;
 };
 
+type PaymentMethod = "CASH" | "CARD";
+
 function formatTime(d: Date) {
   const hh = String(d.getHours()).padStart(2, "0");
   const mm = String(d.getMinutes()).padStart(2, "0");
@@ -102,6 +104,7 @@ export function OrderComposer({
     total: number;
     status: string;
   } | null>(null);
+  const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>("CASH");
 
   const loadMenu = useCallback(async () => {
     setLoading(true);
@@ -380,6 +383,7 @@ export function OrderComposer({
     setSuccess(null);
     try {
       const payload = {
+        paymentMethod,
         items: cartItems.map((c) => ({
           menuItemId: c.menuItemId,
           quantity: c.quantity,
@@ -410,15 +414,24 @@ export function OrderComposer({
           throw new Error("建立訂單成功，但回傳格式不正確");
         }
 
-        return data.order as {
+        return data as {
+          order: {
           displayId: string;
           placedAt: string;
           total: number;
           status: string;
+          };
+          payment?: {
+            provider: "ECPAY";
+            action: string;
+            method: "POST";
+            fields: Record<string, string | number>;
+          };
         };
       })();
 
-      const order = await createOrderTask;
+      const result = await createOrderTask;
+      const order = result.order;
       toast.success(`訂單已送出（${order.displayId}）`);
 
       setSuccess({
@@ -430,6 +443,23 @@ export function OrderComposer({
       setCart({});
       setDraft({});
       await loadMenu();
+
+      if (paymentMethod === "CARD" && result.payment?.provider === "ECPAY") {
+        const form = document.createElement("form");
+        form.method = result.payment.method;
+        form.action = result.payment.action;
+        form.style.display = "none";
+        for (const [key, value] of Object.entries(result.payment.fields)) {
+          const input = document.createElement("input");
+          input.type = "hidden";
+          input.name = key;
+          input.value = String(value);
+          form.appendChild(input);
+        }
+        document.body.appendChild(form);
+        form.submit();
+        return;
+      }
     } catch (e) {
       console.error(e);
       const message = e instanceof Error ? e.message : "送出失敗，請稍後再試。";
@@ -750,6 +780,34 @@ export function OrderComposer({
                 </div>
               </div>
 
+              <div className="rounded-lg border border-slate-200 bg-white p-3">
+                <p className="text-xs font-medium text-slate-700">付款方式</p>
+                <div className="mt-2 grid grid-cols-2 gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setPaymentMethod("CASH")}
+                    className={`rounded-md border px-2 py-1.5 text-sm ${
+                      paymentMethod === "CASH"
+                        ? "border-brand-500 bg-brand-50 text-brand-700"
+                        : "border-slate-200 text-slate-700 hover:bg-slate-50"
+                    }`}
+                  >
+                    現金
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setPaymentMethod("CARD")}
+                    className={`rounded-md border px-2 py-1.5 text-sm ${
+                      paymentMethod === "CARD"
+                        ? "border-brand-500 bg-brand-50 text-brand-700"
+                        : "border-slate-200 text-slate-700 hover:bg-slate-50"
+                    }`}
+                  >
+                    信用卡（ECPay）
+                  </button>
+                </div>
+              </div>
+
               {submitError && (
                 <div className="rounded-lg bg-red-50 p-3 text-sm text-red-700">
                   <p className="font-medium">{submitError}</p>
@@ -770,7 +828,11 @@ export function OrderComposer({
                 onClick={submit}
                 disabled={submitting || cartItems.length === 0}
               >
-                {submitting ? "送出中..." : "送出訂單（扣庫存）"}
+                {submitting
+                  ? "送出中..."
+                  : paymentMethod === "CARD"
+                    ? "送出訂單並前往信用卡付款"
+                    : "送出訂單（現金）"}
               </Button>
             </div>
           )}

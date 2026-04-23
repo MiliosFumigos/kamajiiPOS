@@ -3,8 +3,10 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { Role } from "@/lib/types";
+import { buildEcpayCheckoutPayload, getEcpayCheckoutAction } from "@/lib/ecpay";
 
 type CreateOrderBody = {
+  paymentMethod?: "CASH" | "CARD";
   items: {
     menuItemId: string;
     quantity: number;
@@ -50,6 +52,22 @@ function parseYyyymmddToUTC(dateStr: string): { start: Date; end: Date } | null 
   const start = new Date(Date.UTC(year, month - 1, day));
   const end = new Date(Date.UTC(year, month - 1, day + 1));
   return { start, end };
+}
+
+function resolveClientBackUrl(request: Request, storeId: string): string {
+  const fallback = `${new URL(request.url).origin}/kiosk?storeId=${encodeURIComponent(
+    storeId
+  )}`;
+  const referer = request.headers.get("referer");
+  if (!referer) return fallback;
+  try {
+    const candidate = new URL(referer);
+    const requestOrigin = new URL(request.url).origin;
+    if (candidate.origin !== requestOrigin) return fallback;
+    return candidate.toString();
+  } catch {
+    return fallback;
+  }
 }
 
 function computeTotalPrepById(orders: any[]): Map<string, number> {
@@ -178,6 +196,7 @@ export async function POST(request: Request) {
   }
 
   const itemsInput = body.items ?? [];
+  const paymentMethod = body.paymentMethod === "CARD" ? "CARD" : "CASH";
   if (!Array.isArray(itemsInput) || itemsInput.length === 0) {
     return NextResponse.json({ error: "請至少選擇一個商品" }, { status: 400 });
   }
@@ -486,6 +505,7 @@ export async function POST(request: Request) {
           paymentStatus: "UNPAID",
           status: createdOrder.status,
         },
+        paymentMethod,
       };
     });
 
@@ -494,6 +514,35 @@ export async function POST(request: Request) {
         { error: result.error, details: (result as any).details ?? undefined },
         { status: result.code }
       );
+    }
+
+    if (paymentMethod === "CARD") {
+      const baseUrl =
+        process.env.ECPAY_BASE_URL?.trim() ||
+        process.env.NEXTAUTH_URL?.trim() ||
+        "http://localhost:3000";
+      const clientBackUrl = resolveClientBackUrl(request, storeId);
+      const merchantTradeNo = `${result.order.displayId.replace(/[^A-Za-z0-9]/g, "").slice(0, 14)}${result.order.id.replace(/[^A-Za-z0-9]/g, "").slice(-6)}`;
+      const payload = buildEcpayCheckoutPayload({
+        merchantTradeNo,
+        merchantTradeDate: new Date(),
+        totalAmount: result.order.total,
+        tradeDesc: "POS Order Payment",
+        itemName: `${result.order.displayId}#${result.order.total}元`,
+        returnUrl: `${baseUrl}/api/payments/ecpay/callback`,
+        clientBackUrl,
+        customField1: result.order.id,
+      });
+
+      return NextResponse.json({
+        ...result,
+        payment: {
+          provider: "ECPAY",
+          action: getEcpayCheckoutAction(),
+          method: "POST",
+          fields: payload,
+        },
+      });
     }
 
     return NextResponse.json(result);
