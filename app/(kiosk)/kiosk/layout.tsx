@@ -24,7 +24,7 @@ export default async function KioskLayout({
   return (
     <div className="min-h-screen bg-slate-50">
       <header className="border-b border-slate-200 bg-white">
-        <div className="mx-auto flex max-w-8xl items-center justify-between px-4 py-4">
+        <div className="mx-auto flex w-full max-w-[1480px] items-center justify-between px-4 py-4">
           <div>
             <p className="text-sm text-slate-500">自助點餐</p>
             <h1 className="text-lg font-semibold text-slate-900">
@@ -33,7 +33,7 @@ export default async function KioskLayout({
           </div>
         </div>
       </header>
-      <main className="mx-auto max-w-8xl p-4">{children}</main>
+      <main className="mx-auto w-full max-w-[1480px] p-4">{children}</main>
     </div>
   );
 }

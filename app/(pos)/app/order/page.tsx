@@ -1,15 +1,28 @@
 "use client";
 
 import { useSession } from "next-auth/react";
+import { useSearchParams } from "next/navigation";
 import { OrderComposer } from "@/components/order/OrderComposer";
 import { Card } from "@/components/ui/Card";
 import { FullScreenLoading } from "@/components/ui/FullScreenLoading";
 import { Role } from "@/lib/types";
+import { useEffect } from "react";
+import { toast } from "sonner";
 
 export default function AppOrderPage() {
   const { data: session, status } = useSession();
+  const searchParams = useSearchParams();
   const role = session?.user?.role as Role | undefined;
   const canUseOrder = role === Role.MANAGER || role === Role.STAFF;
+
+  useEffect(() => {
+    if (searchParams.get("payment") !== "success") return;
+    toast.success("刷卡成功，訂單已完成付款");
+    const url = new URL(window.location.href);
+    url.searchParams.delete("payment");
+    url.searchParams.delete("orderId");
+    window.history.replaceState({}, "", url.toString());
+  }, [searchParams]);
 
   // 固定高度包覆，避免 session 載入前/後切換造成頁面高度位移（CLS）
   return (
@@ -38,6 +51,7 @@ export default function AppOrderPage() {
           title="POS 點餐"
           menuEndpoint="/api/menu"
           orderEndpoint="/api/orders"
+          checkoutContext="POS"
         />
       )}
     </div>

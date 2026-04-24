@@ -65,12 +65,14 @@ export function OrderComposer({
   orderEndpoint = "/api/orders",
   showLatestOrderSummary = true,
   categoryFilterSidebar = false,
+  checkoutContext = "POS",
 }: {
   title: string;
   menuEndpoint: string;
   orderEndpoint?: string;
   showLatestOrderSummary?: boolean;
   categoryFilterSidebar?: boolean;
+  checkoutContext?: "POS" | "KIOSK";
 }) {
   const [menuItems, setMenuItems] = useState<MenuItem[]>([]);
   const [loading, setLoading] = useState(true);
@@ -383,6 +385,7 @@ export function OrderComposer({
     setSuccess(null);
     try {
       const payload = {
+        checkoutContext,
         paymentMethod,
         items: cartItems.map((c) => ({
           menuItemId: c.menuItemId,

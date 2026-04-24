@@ -1,12 +1,21 @@
 "use client";
 
 import { useMemo } from "react";
-import { useSearchParams } from "next/navigation";
+import Link from "next/link";
+import { usePathname, useSearchParams } from "next/navigation";
 import { OrderComposer } from "@/components/order/OrderComposer";
 
 export default function KioskPage() {
+  const pathname = usePathname();
   const searchParams = useSearchParams();
   const storeId = searchParams.get("storeId") || "";
+  const tenantPrefix = useMemo(() => {
+    const parts = pathname.split("/").filter(Boolean);
+    if (parts.length >= 2 && parts[1] === "kiosk") {
+      return `/${parts[0]}`;
+    }
+    return "";
+  }, [pathname]);
 
   const menuEndpoint = useMemo(() => {
     const qs = storeId ? `?storeId=${encodeURIComponent(storeId)}` : "";
@@ -18,14 +27,30 @@ export default function KioskPage() {
     return `/api/orders${qs}`;
   }, [storeId]);
 
+  const ordersOverviewHref = useMemo(() => {
+    const qs = storeId ? `?storeId=${encodeURIComponent(storeId)}` : "";
+    return `${tenantPrefix}/kiosk/orders${qs}`;
+  }, [storeId, tenantPrefix]);
+
   return (
-    <OrderComposer
-      title="Kiosk 點餐（免登入）"
-      menuEndpoint={menuEndpoint}
-      orderEndpoint={orderEndpoint}
-      showLatestOrderSummary={false}
-      categoryFilterSidebar
-    />
+    <div className="space-y-4">
+      <div className="flex justify-end">
+        <Link
+          href={ordersOverviewHref}
+          className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
+        >
+          查看訂單總覽
+        </Link>
+      </div>
+      <OrderComposer
+        title="Kiosk 點餐（免登入）"
+        menuEndpoint={menuEndpoint}
+        orderEndpoint={orderEndpoint}
+        showLatestOrderSummary={false}
+        categoryFilterSidebar
+        checkoutContext="KIOSK"
+      />
+    </div>
   );
 }
 

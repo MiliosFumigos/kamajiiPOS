@@ -6,6 +6,7 @@ import { Role } from "@/lib/types";
 import { buildEcpayCheckoutPayload, getEcpayCheckoutAction } from "@/lib/ecpay";
 
 type CreateOrderBody = {
+  checkoutContext?: "POS" | "KIOSK";
   paymentMethod?: "CASH" | "CARD";
   items: {
     menuItemId: string;
@@ -54,20 +55,50 @@ function parseYyyymmddToUTC(dateStr: string): { start: Date; end: Date } | null 
   return { start, end };
 }
 
-function resolveClientBackUrl(request: Request, storeId: string): string {
-  const fallback = `${new URL(request.url).origin}/kiosk?storeId=${encodeURIComponent(
-    storeId
-  )}`;
+function resolveClientBackUrl(request: Request): string | null {
   const referer = request.headers.get("referer");
-  if (!referer) return fallback;
+  if (!referer) return null;
   try {
     const candidate = new URL(referer);
     const requestOrigin = new URL(request.url).origin;
-    if (candidate.origin !== requestOrigin) return fallback;
+    if (candidate.origin !== requestOrigin) return null;
     return candidate.toString();
   } catch {
-    return fallback;
+    return null;
   }
+}
+
+function resolveTenantPrefixFromReferer(request: Request): string {
+  const referer = request.headers.get("referer");
+  if (!referer) return "";
+  try {
+    const refererUrl = new URL(referer);
+    const requestOrigin = new URL(request.url).origin;
+    if (refererUrl.origin !== requestOrigin) return "";
+    const parts = refererUrl.pathname.split("/").filter(Boolean);
+    if (parts.length >= 2 && parts[1] === "kiosk") {
+      return `/${parts[0]}`;
+    }
+    return "";
+  } catch {
+    return "";
+  }
+}
+
+function getCheckoutClientBackUrl(
+  request: Request,
+  storeId: string,
+  orderId: string,
+  checkoutContext: "POS" | "KIOSK"
+): string {
+  const origin = new URL(request.url).origin;
+  if (checkoutContext === "KIOSK") {
+    const tenantPrefix = resolveTenantPrefixFromReferer(request);
+    return `${origin}${tenantPrefix}/kiosk/payment-success?storeId=${encodeURIComponent(
+      storeId
+    )}&orderId=${encodeURIComponent(orderId)}`;
+  }
+  return `${origin}/app/order?payment=success&orderId=${encodeURIComponent(orderId)}`;
 }
 
 function computeTotalPrepById(orders: any[]): Map<string, number> {
@@ -196,6 +227,7 @@ export async function POST(request: Request) {
   }
 
   const itemsInput = body.items ?? [];
+  const checkoutContext = body.checkoutContext === "KIOSK" ? "KIOSK" : "POS";
   const paymentMethod = body.paymentMethod === "CARD" ? "CARD" : "CASH";
   if (!Array.isArray(itemsInput) || itemsInput.length === 0) {
     return NextResponse.json({ error: "請至少選擇一個商品" }, { status: 400 });
@@ -521,7 +553,16 @@ export async function POST(request: Request) {
         process.env.ECPAY_BASE_URL?.trim() ||
         process.env.NEXTAUTH_URL?.trim() ||
         "http://localhost:3000";
-      const clientBackUrl = resolveClientBackUrl(request, storeId);
+      const fallbackClientBackUrl = getCheckoutClientBackUrl(
+        request,
+        storeId,
+        result.order.id,
+        checkoutContext
+      );
+      const clientBackUrl =
+        checkoutContext === "KIOSK"
+          ? fallbackClientBackUrl
+          : resolveClientBackUrl(request) || fallbackClientBackUrl;
       const merchantTradeNo = `${result.order.displayId.replace(/[^A-Za-z0-9]/g, "").slice(0, 14)}${result.order.id.replace(/[^A-Za-z0-9]/g, "").slice(-6)}`;
       const payload = buildEcpayCheckoutPayload({
         merchantTradeNo,
