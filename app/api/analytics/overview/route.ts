@@ -3,7 +3,11 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { Role } from "@/lib/types";
-import { getCachedAnalytics, setCachedAnalytics } from "@/lib/analytics-cache";
+import {
+  getCachedAnalytics,
+  getOrCreateInFlightAnalytics,
+  setCachedAnalytics,
+} from "@/lib/analytics-cache";
 import {
   calculateOverviewMetrics,
   formatOverviewResponse,
@@ -116,63 +120,68 @@ export async function GET(request: Request) {
     );
   }
 
-  const storeWhere = {
-    brandId: session.user.brandId,
-    ...(scopedStoreId ? { id: scopedStoreId } : {}),
-  };
+  const { promise, isNew } = getOrCreateInFlightAnalytics(cacheKey, async () => {
+    const storeWhere = {
+      brandId: session.user.brandId,
+      ...(scopedStoreId ? { id: scopedStoreId } : {}),
+    };
 
-  const stores = await prisma.store.findMany({
-    where: storeWhere,
-    select: { id: true, name: true },
-    orderBy: { createdAt: "asc" },
-  });
-
-  if (stores.length === 0) {
-    return NextResponse.json({
-      role,
-      range: { start, end, days },
-      stores: [],
-      selectedStoreId: scopedStoreId,
-      summary: {
-        totalRevenue: 0,
-        totalOrders: 0,
-        avgOrderValue: 0,
-        cancelRate: 0,
-        overtimeRate: 0,
-      },
-      charts: {
-        peakHours: [],
-        topProducts: [],
-        topCategories: [],
-        paymentMethods: [],
-        salesTrend: [],
-        staffRanking: [],
-        storeComparison: [],
-        inventoryBurn: [],
-      },
+    const stores = await prisma.store.findMany({
+      where: storeWhere,
+      select: { id: true, name: true },
+      orderBy: { createdAt: "asc" },
     });
-  }
 
-  const loaded = await loadOverviewData({
-    brandId: session.user.brandId,
-    storeIds: stores.map((s) => s.id),
-    stores,
-    start,
-    end,
-    days,
-  });
-  const metrics = calculateOverviewMetrics(loaded);
-  const response = formatOverviewResponse({
-    role: role as "OWNER" | "MANAGER",
-    range: { start, end, days },
-    stores,
-    selectedStoreId: scopedStoreId,
-    forceRefreshed: forceRefresh,
-    metrics,
+    if (stores.length === 0) {
+      return {
+        role,
+        range: { start, end, days },
+        stores: [],
+        selectedStoreId: scopedStoreId,
+        summary: {
+          totalRevenue: 0,
+          totalOrders: 0,
+          avgOrderValue: 0,
+          cancelRate: 0,
+          overtimeRate: 0,
+        },
+        charts: {
+          peakHours: [],
+          topProducts: [],
+          topCategories: [],
+          paymentMethods: [],
+          salesTrend: [],
+          staffRanking: [],
+          storeComparison: [],
+          inventoryBurn: [],
+        },
+      };
+    }
+
+    const loaded = await loadOverviewData({
+      brandId: session.user.brandId,
+      storeIds: stores.map((s) => s.id),
+      stores,
+      start,
+      end,
+      days,
+    });
+    const metrics = calculateOverviewMetrics(loaded);
+    const response = formatOverviewResponse({
+      role: role as "OWNER" | "MANAGER",
+      range: { start, end, days },
+      stores,
+      selectedStoreId: scopedStoreId,
+      forceRefreshed: forceRefresh,
+      metrics,
+    });
+
+    setCachedAnalytics(cacheKey, response);
+    return response;
   });
 
-  setCachedAnalytics(cacheKey, response);
+  const response = await promise;
   return NextResponse.json(response, {
-    headers: { "x-analytics-cache": "MISS" },
+    headers: { "x-analytics-cache": isNew ? "MISS" : "HIT" },
   });
 }

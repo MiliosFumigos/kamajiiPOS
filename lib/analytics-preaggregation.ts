@@ -92,8 +92,8 @@ export async function buildDailyStoreAggregates(params: {
       }
     }
 
-    for (const [storeId, g] of Array.from(grouped.entries())) {
-      await prisma.analyticsDailyStore.upsert({
+    const upserts = Array.from(grouped.entries()).map(([storeId, g]) =>
+      prisma.analyticsDailyStore.upsert({
         where: { storeId_date: { storeId, date: dayStart } },
         update: {
           revenue: g.revenue,
@@ -116,7 +116,8 @@ export async function buildDailyStoreAggregates(params: {
           cashCount: g.cashCount,
           cardCount: g.cardCount,
         },
-      });
-    }
+      })
+    );
+    await prisma.$transaction(upserts);
   }
 }

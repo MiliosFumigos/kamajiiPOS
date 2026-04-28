@@ -4,6 +4,7 @@ type CacheEntry<T> = {
 };
 
 const analyticsCache = new Map<string, CacheEntry<unknown>>();
+const analyticsInFlight = new Map<string, Promise<unknown>>();
 
 export function getCachedAnalytics<T>(key: string): T | null {
   const cached = analyticsCache.get(key);
@@ -30,4 +31,20 @@ export function clearAnalyticsCache(prefix?: string) {
   for (const key of Array.from(analyticsCache.keys())) {
     if (key.startsWith(prefix)) analyticsCache.delete(key);
   }
+}
+
+export function getOrCreateInFlightAnalytics<T>(
+  key: string,
+  factory: () => Promise<T>
+): { promise: Promise<T>; isNew: boolean } {
+  const existing = analyticsInFlight.get(key) as Promise<T> | undefined;
+  if (existing) {
+    return { promise: existing, isNew: false };
+  }
+
+  const created = factory().finally(() => {
+    analyticsInFlight.delete(key);
+  });
+  analyticsInFlight.set(key, created);
+  return { promise: created, isNew: true };
 }

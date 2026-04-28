@@ -212,7 +212,16 @@ export function calculateOverviewMetrics(data: OverviewLoadedData): OverviewCalc
   const categoryMap = new Map<string, number>();
   const paymentMap = new Map<string, { method: string; count: number; revenue: number }>();
   const staffMap = new Map<string, { userId: string; name: string; orderCount: number; revenue: number; avgOrderValue: number }>();
-  const storeMap = new Map<string, { storeId: string; storeName: string; revenue: number; orders: number; cancelRate: number; overtimeRate: number }>();
+  const storeAggMap = new Map<
+    string,
+    {
+      revenue: number;
+      orders: number;
+      cancelCount: number;
+      overtimeEligibleCount: number;
+      overtimeCount: number;
+    }
+  >();
   const ingredientConsumption = new Map<string, number>();
 
   for (const order of orders) {
@@ -271,23 +280,19 @@ export function calculateOverviewMetrics(data: OverviewLoadedData): OverviewCalc
     card.count += row.cardCount;
     paymentMap.set("CARD", card);
 
-    const rowsForStore = dailyRows.filter((x) => x.storeId === row.storeId);
-    const totalOvertimeEligible = rowsForStore.reduce((acc, x) => acc + x.overtimeEligibleCount, 0);
-    const totalOvertime = rowsForStore.reduce((acc, x) => acc + x.overtimeCount, 0);
-    const totalCancel = rowsForStore.reduce((acc, x) => acc + x.cancelCount, 0);
-    const byStore = storeMap.get(row.storeId) ?? {
-      storeId: row.storeId,
-      storeName: storeNameById.get(row.storeId) ?? "未知分店",
+    const byStoreAgg = storeAggMap.get(row.storeId) ?? {
       revenue: 0,
       orders: 0,
-      cancelRate: 0,
-      overtimeRate: 0,
+      cancelCount: 0,
+      overtimeEligibleCount: 0,
+      overtimeCount: 0,
     };
-    byStore.revenue += row.revenue;
-    byStore.orders += row.orderCount;
-    byStore.cancelRate = byStore.orders > 0 ? totalCancel / byStore.orders : 0;
-    byStore.overtimeRate = totalOvertimeEligible > 0 ? totalOvertime / totalOvertimeEligible : 0;
-    storeMap.set(row.storeId, byStore);
+    byStoreAgg.revenue += row.revenue;
+    byStoreAgg.orders += row.orderCount;
+    byStoreAgg.cancelCount += row.cancelCount;
+    byStoreAgg.overtimeEligibleCount += row.overtimeEligibleCount;
+    byStoreAgg.overtimeCount += row.overtimeCount;
+    storeAggMap.set(row.storeId, byStoreAgg);
   }
 
   for (const c of customizations) {
@@ -309,6 +314,17 @@ export function calculateOverviewMetrics(data: OverviewLoadedData): OverviewCalc
     .map((s) => ({ ...s, avgOrderValue: s.orderCount > 0 ? Math.round(s.revenue / s.orderCount) : 0 }))
     .sort((a, b) => b.revenue - a.revenue)
     .slice(0, 10);
+  const storeComparison = Array.from(storeAggMap.entries())
+    .map(([storeId, agg]) => ({
+      storeId,
+      storeName: storeNameById.get(storeId) ?? "未知分店",
+      revenue: agg.revenue,
+      orders: agg.orders,
+      cancelRate: agg.orders > 0 ? agg.cancelCount / agg.orders : 0,
+      overtimeRate:
+        agg.overtimeEligibleCount > 0 ? agg.overtimeCount / agg.overtimeEligibleCount : 0,
+    }))
+    .sort((a, b) => b.revenue - a.revenue);
 
   const inventoryBurn = Array.from(ingredientConsumption.entries())
     .map(([ingredientId, consumed]) => {
@@ -352,7 +368,7 @@ export function calculateOverviewMetrics(data: OverviewLoadedData): OverviewCalc
       paymentMethods: Array.from(paymentMap.values()).sort((a, b) => b.count - a.count),
       salesTrend: Array.from(salesTrendMap.values()).sort((a, b) => a.date.localeCompare(b.date)),
       staffRanking,
-      storeComparison: Array.from(storeMap.values()).sort((a, b) => b.revenue - a.revenue),
+      storeComparison,
       inventoryBurn,
     },
   };
