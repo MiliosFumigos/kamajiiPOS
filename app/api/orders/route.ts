@@ -54,6 +54,18 @@ const patchOrderSchema = z
     message: "請至少提供 status 或 paymentStatus 其中一項",
   });
 
+class ApiConflictError extends Error {
+  status: number;
+  details?: unknown;
+
+  constructor(message: string, status = 409, details?: unknown) {
+    super(message);
+    this.name = "ApiConflictError";
+    this.status = status;
+    this.details = details;
+  }
+}
+
 const ALLOWED_STATUSES = [
   "QUEUED",
   "IN_PROGRESS",
@@ -293,16 +305,7 @@ export async function POST(request: Request) {
 
   try {
     const result = await prisma.$transaction(async (tx) => {
-      // 1) 取得/遞增每日流水號 → displayId
-      const counter = await tx.orderCounter.upsert({
-        where: { storeId_date: { storeId, date: dayStart } },
-        update: { seq: { increment: 1 } },
-        create: { storeId, date: dayStart, seq: 1 },
-        select: { seq: true },
-      });
-      const displayId = `ORD-${dayKey}-${String(counter.seq).padStart(4, "0")}`;
-
-      // 2) 拉取菜單品項（含 recipe / customizations）
+      // 1) 拉取菜單品項（含 recipe / customizations）
       const menuItemIds = Array.from(
         new Set(itemsInput.map((i) => i.menuItemId).filter(Boolean))
       );
@@ -325,7 +328,8 @@ export async function POST(request: Request) {
       });
       const menuMap = new Map(menuItems.map((m) => [m.id, m]));
 
-      // 3) 驗證 & dailyLimit（以當日已下單數量估算，排除 CANCELLED）
+      // 2) 驗證輸入與 dailyLimit（一次聚合查詢，避免 N 次 aggregate）
+      const requestedQtyByMenuId = new Map<string, number>();
       for (const input of itemsInput) {
         const qty = Number.isFinite(input.quantity)
           ? Math.max(0, Math.floor(input.quantity))
@@ -337,30 +341,44 @@ export async function POST(request: Request) {
         if (!menu) {
           throw new Error("菜單品項不存在或已停用");
         }
-
-        const soldAgg = await tx.orderItem.aggregate({
-          where: {
-            menuItemId: menu.id,
-            order: {
-              storeId,
-              placedAt: { gte: dayStart, lt: dayEnd },
-              status: { not: "CANCELLED" as any },
-            },
-          },
-          _sum: { quantity: true },
-        });
-        const sold = soldAgg._sum.quantity ?? 0;
-        if (sold + qty > menu.dailyLimit) {
+        requestedQtyByMenuId.set(
+          menu.id,
+          (requestedQtyByMenuId.get(menu.id) ?? 0) + qty
+        );
+      }
+      const soldRows =
+        menuItemIds.length > 0
+          ? await tx.orderItem.groupBy({
+              by: ["menuItemId"],
+              where: {
+                menuItemId: { in: menuItemIds },
+                order: {
+                  storeId,
+                  placedAt: { gte: dayStart, lt: dayEnd },
+                  status: { not: "CANCELLED" as any },
+                },
+              },
+              _sum: { quantity: true },
+            })
+          : [];
+      const soldByMenuId = new Map(
+        soldRows.map((row) => [row.menuItemId, row._sum.quantity ?? 0])
+      );
+      for (const [menuId, requestedQty] of Array.from(requestedQtyByMenuId.entries())) {
+        const menu = menuMap.get(menuId);
+        if (!menu) continue;
+        const sold = soldByMenuId.get(menuId) ?? 0;
+        if (sold + requestedQty > menu.dailyLimit) {
           const remaining = Math.max(0, menu.dailyLimit - sold);
           return {
             ok: false as const,
             code: 409,
-            error: `「${menu.name}」今日剩餘 ${remaining} 份，無法再下單 ${qty} 份`,
+            error: `「${menu.name}」今日剩餘 ${remaining} 份，無法再下單 ${requestedQty} 份`,
           };
         }
       }
 
-      // 4) 依 recipe + 客製化額外用量 聚合需要扣的原料數量
+      // 3) 依 recipe + 客製化額外用量 聚合需要扣的原料數量
       const requiredByIngredient = new Map<string, number>();
       for (const input of itemsInput) {
         const menu = menuMap.get(input.menuItemId);
@@ -399,36 +417,27 @@ export async function POST(request: Request) {
         }
       }
 
-      // 5) 扣庫存（條件式 updateMany，避免扣到負數）
-      const insufficient: { ingredientId: string; needed: number }[] = [];
-      const deducted: { ingredientId: string; quantity: number }[] = [];
+      // 4) 扣庫存（先一次檢查，再條件扣減；若競態失敗直接 rollback）
+      const ingredientIds = Array.from(requiredByIngredient.keys());
+      const inventoryRows =
+        ingredientIds.length > 0
+          ? await tx.inventory.findMany({
+              where: { brandId, storeId, ingredientId: { in: ingredientIds } },
+              select: { ingredientId: true, quantity: true },
+            })
+          : [];
+      const availableByIngredientId = new Map(
+        inventoryRows.map((row) => [row.ingredientId, row.quantity])
+      );
+      const insufficient: { ingredientId: string; needed: number; available: number }[] = [];
       for (const [ingredientId, needed] of Array.from(requiredByIngredient.entries())) {
         if (needed <= 0) continue;
-        const updated = await tx.inventory.updateMany({
-          where: {
-            brandId,
-            storeId,
-            ingredientId,
-            quantity: { gte: needed },
-          },
-          data: { quantity: { decrement: needed } },
-        });
-        if (updated.count !== 1) {
-          insufficient.push({ ingredientId, needed });
-        } else {
-          deducted.push({ ingredientId, quantity: needed });
+        const available = availableByIngredientId.get(ingredientId) ?? 0;
+        if (available < needed) {
+          insufficient.push({ ingredientId, needed, available });
         }
       }
       if (insufficient.length > 0) {
-        // 僅把本次交易中「已成功扣減」的數量補回去，避免誤增未扣成功的原料。
-        for (const { ingredientId, quantity } of deducted) {
-          if (quantity <= 0) continue;
-          await tx.inventory.updateMany({
-            where: { brandId, storeId, ingredientId },
-            data: { quantity: { increment: quantity } },
-          });
-        }
-
         const ingredients = await tx.ingredient.findMany({
           where: { id: { in: insufficient.map((i) => i.ingredientId) } },
           select: { id: true, name: true, unit: true },
@@ -443,9 +452,34 @@ export async function POST(request: Request) {
             name: ingMap.get(x.ingredientId)?.name ?? "未知原料",
             unit: ingMap.get(x.ingredientId)?.unit ?? "",
             needed: x.needed,
+            available: x.available,
           })),
         };
       }
+      for (const [ingredientId, needed] of Array.from(requiredByIngredient.entries())) {
+        if (needed <= 0) continue;
+        const updated = await tx.inventory.updateMany({
+          where: {
+            brandId,
+            storeId,
+            ingredientId,
+            quantity: { gte: needed },
+          },
+          data: { quantity: { decrement: needed } },
+        });
+        if (updated.count !== 1) {
+          throw new ApiConflictError("庫存在下單過程中變動，請重試", 409);
+        }
+      }
+
+      // 5) 取得/遞增每日流水號 → displayId（延後到可建立訂單前，減少無效遞增）
+      const counter = await tx.orderCounter.upsert({
+        where: { storeId_date: { storeId, date: dayStart } },
+        update: { seq: { increment: 1 } },
+        create: { storeId, date: dayStart, seq: 1 },
+        select: { seq: true },
+      });
+      const displayId = `ORD-${dayKey}-${String(counter.seq).padStart(4, "0")}`;
 
       // 6) 建立訂單與明細（快照）
       const createdOrder = await tx.order.create({
@@ -633,6 +667,12 @@ export async function POST(request: Request) {
 
     return NextResponse.json(result);
   } catch (e) {
+    if (e instanceof ApiConflictError) {
+      return NextResponse.json(
+        { error: e.message, details: e.details ?? undefined },
+        { status: e.status }
+      );
+    }
     console.error(e);
     return NextResponse.json(
       { error: e instanceof Error ? e.message : "建立訂單失敗" },
