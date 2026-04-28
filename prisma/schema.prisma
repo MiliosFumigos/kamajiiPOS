@@ -24,6 +24,11 @@ enum PaymentStatus {
   PAID
 }
 
+enum PaymentMethod {
+  CASH
+  CARD
+}
+
 enum OrderStatus {
   /// 準備中（尚未輪到開始製作）
   QUEUED
@@ -47,6 +52,7 @@ model Brand {
   inventories Inventory[]
   menuItems  MenuItem[]
   orders     Order[]
+  analyticsDailyStores AnalyticsDailyStore[]
   createdAt DateTime @default(now())
 }
 
@@ -65,6 +71,8 @@ model User {
   accounts      Account[]
   sessions      Session[]
   createdAt     DateTime  @default(now())
+  createdOrders Order[]   @relation("OrderCreatedBy")
+  completedOrders Order[] @relation("OrderCompletedBy")
 
   @@unique([email, brandId])
 }
@@ -80,6 +88,7 @@ model Store {
   ingredients Ingredient[]
   inventories Inventory[]
   menuItems  MenuItem[]
+  analyticsDailyStores AnalyticsDailyStore[]
   createdAt DateTime @default(now())
 }
 
@@ -185,6 +194,8 @@ model Order {
   total     Int
   /// 付款狀態
   paymentStatus PaymentStatus @default(UNPAID)
+  /// 付款方式（現金 / 刷卡）
+  paymentMethod PaymentMethod @default(CASH)
   /// 訂單製作流程狀態
   status    OrderStatus @default(QUEUED)
   /// 給客人看的「固定」起始預估完成時間（當訂單進入 QUEUED 時封存）
@@ -193,6 +204,12 @@ model Order {
   startedAt DateTime?
   /// 進入「待取貨」的時間（可選：用來做實際 vs 預估比較）
   readyAt   DateTime?
+  /// 建單人（POS 由店員建立；Kiosk 可能為空）
+  createdByUserId String?
+  createdByUser   User? @relation("OrderCreatedBy", fields: [createdByUserId], references: [id], onDelete: SetNull)
+  /// 完單人（店員把訂單推到 COMPLETED 時記錄）
+  completedByUserId String?
+  completedByUser   User? @relation("OrderCompletedBy", fields: [completedByUserId], references: [id], onDelete: SetNull)
   placedAt  DateTime @default(now())
   createdAt DateTime @default(now())
 
@@ -200,6 +217,9 @@ model Order {
 
   @@unique([storeId, displayId])
   @@index([brandId, storeId, placedAt])
+  @@index([brandId, storeId, paymentMethod, placedAt])
+  @@index([brandId, storeId, createdByUserId, placedAt])
+  @@index([brandId, storeId, completedByUserId, placedAt])
 }
 
 model OrderItem {
@@ -247,6 +267,29 @@ model OrderCounter {
 
   @@unique([storeId, date])
   @@index([storeId, date])
+}
+
+/// 每店每日聚合指標（提供 dashboard 快查）
+model AnalyticsDailyStore {
+  id        String   @id @default(cuid())
+  brandId   String
+  brand     Brand    @relation(fields: [brandId], references: [id], onDelete: Cascade)
+  storeId   String
+  store     Store    @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  date      DateTime
+  revenue   Int      @default(0)
+  orderCount Int     @default(0)
+  cancelCount Int    @default(0)
+  overtimeEligibleCount Int @default(0)
+  overtimeCount Int  @default(0)
+  cashCount Int      @default(0)
+  cardCount Int      @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([storeId, date])
+  @@index([brandId, date])
+  @@index([brandId, storeId, date])
 }
 
 // NextAuth.js required models

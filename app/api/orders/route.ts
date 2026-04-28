@@ -176,6 +176,7 @@ function computeStaffEtaById(
 async function resolveBrandAndStore(request: Request): Promise<{
   brandId: string;
   storeId: string;
+  actorUserId: string | null;
 }> {
   const session = await getServerSession(authOptions);
 
@@ -197,7 +198,7 @@ async function resolveBrandAndStore(request: Request): Promise<{
     });
     if (!store) throw new Error("Store not found for user");
 
-    return { brandId, storeId: store.id };
+    return { brandId, storeId: store.id, actorUserId: session.user.id };
   }
 
   // Kiosk（免登入）：path-based 多租戶下，依 storeId 解析 brand/store
@@ -211,7 +212,7 @@ async function resolveBrandAndStore(request: Request): Promise<{
   });
   if (!store) throw new Error("Store not found");
 
-  return { brandId: store.brandId, storeId: store.id };
+  return { brandId: store.brandId, storeId: store.id, actorUserId: null };
 }
 
 /**
@@ -235,8 +236,9 @@ export async function POST(request: Request) {
 
   let brandId = "";
   let storeId = "";
+  let actorUserId: string | null = null;
   try {
-    ({ brandId, storeId } = await resolveBrandAndStore(request));
+    ({ brandId, storeId, actorUserId } = await resolveBrandAndStore(request));
   } catch (e) {
     return NextResponse.json(
       { error: e instanceof Error ? e.message : "Unauthorized" },
@@ -413,7 +415,9 @@ export async function POST(request: Request) {
           displayId,
           // 新訂單：尚未付款、但進入製作流程
           paymentStatus: "UNPAID" as any,
+          paymentMethod: paymentMethod as any,
           status: "QUEUED" as any,
+          createdByUserId: actorUserId,
           total: 0,
           placedAt: now,
         } as any,
@@ -535,6 +539,7 @@ export async function POST(request: Request) {
           placedAt: createdOrder.placedAt,
           total,
           paymentStatus: "UNPAID",
+          paymentMethod,
           status: createdOrder.status,
         },
         paymentMethod,
@@ -702,6 +707,7 @@ export async function GET(request: Request) {
         total: (o as any).total,
         // 新欄位：付款狀態
         paymentStatus: (o as any).paymentStatus ?? "UNPAID",
+        paymentMethod: (o as any).paymentMethod ?? "CASH",
         // 製作狀態
         status: (o as any).status,
         placedAt: (o as any).placedAt,
@@ -831,6 +837,9 @@ export async function PATCH(request: Request) {
       data.readyAt = null;
     }
     // 取消：保留 startedAt/readyAt（可做統計）；不特別清掉
+    if (nextStatus === "COMPLETED") {
+      data.completedByUserId = session.user.id;
+    }
   }
 
   await prisma.order.update({
@@ -881,6 +890,7 @@ export async function PATCH(request: Request) {
       displayId: true,
       total: true,
       paymentStatus: true,
+      paymentMethod: true,
       status: true,
       placedAt: true,
       startedAt: true,

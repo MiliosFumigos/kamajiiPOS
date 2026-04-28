@@ -5,6 +5,7 @@ import * as QRCode from "qrcode";
 
 import { Card } from "@/components/ui/Card";
 import { CopyButton } from "@/components/ui/CopyButton";
+import { AnalyticsDashboard } from "@/components/dashboard/AnalyticsDashboard";
 import { prisma } from "@/lib/prisma";
 import { authOptions } from "@/lib/auth";
 import { Role } from "@/lib/types";
@@ -172,6 +173,10 @@ export default async function AppDashboardPage() {
           </div>
         </div>
       </Card>
+
+      {(currentUser.role === Role.OWNER || currentUser.role === Role.MANAGER) && (
+        <AnalyticsDashboard />
+      )}
     </div>
   );
 }
