@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { Role } from "@/lib/types";
 import { getSessionFromToken, requireRole } from "@/lib/rbac";
+import { apiError } from "@/lib/api-error";
 
 // 取得當前品牌 / 分店底下的員工：
 // - OWNER：看到整個品牌的所有員工
@@ -13,10 +14,7 @@ export async function GET(request: NextRequest) {
 
   const brandId = session!.brandId;
   if (!brandId) {
-    return NextResponse.json(
-      { error: "您必須屬於某個品牌才能查看員工列表" },
-      { status: 400 }
-    );
+    return apiError("BRAND_NOT_FOUND", "您必須屬於某個品牌才能查看員工列表", 400);
   }
 
   try {
@@ -28,10 +26,7 @@ export async function GET(request: NextRequest) {
       })) as any;
 
       if (!manager?.storeId) {
-        return NextResponse.json(
-          { error: "分店長尚未綁定分店，無法查看員工列表" },
-          { status: 400 }
-        );
+        return apiError("MANAGER_STORE_NOT_BOUND", "分店長尚未綁定分店，無法查看員工列表", 400);
       }
 
       where.storeId = manager.storeId as string;
@@ -67,7 +62,7 @@ export async function GET(request: NextRequest) {
   } catch (error) {
     console.error("Fetch staff list error:", error);
     return NextResponse.json(
-      { error: "取得員工列表失敗，請稍後再試" },
+      { code: "STAFF_LIST_FAILED", message: "取得員工列表失敗，請稍後再試" },
       { status: 500 }
     );
   }

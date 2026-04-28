@@ -3,6 +3,7 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { Role } from "@/lib/types";
+import { apiError } from "@/lib/api-error";
 
 type RecipeLineInput = {
   ingredientId: string;
@@ -95,16 +96,16 @@ export async function GET() {
   const session = await getServerSession(authOptions);
 
   if (!session?.user) {
-    return new NextResponse("Unauthorized", { status: 401 });
+    return apiError("UNAUTHORIZED", "Unauthorized", 401);
   }
 
   const brandId = session.user.brandId;
   const storeId = session.user.storeId;
   if (!brandId) {
-    return new NextResponse("Brand not found for user", { status: 400 });
+    return apiError("BRAND_NOT_FOUND", "Brand not found for user", 400);
   }
   if (!storeId) {
-    return new NextResponse("Store not found for user", { status: 400 });
+    return apiError("STORE_NOT_FOUND", "Store not found for user", 400);
   }
 
   const items = await prisma.menuItem.findMany({
@@ -166,26 +167,26 @@ export async function POST(request: Request) {
   const session = await getServerSession(authOptions);
 
   if (!session?.user) {
-    return new NextResponse("Unauthorized", { status: 401 });
+    return apiError("UNAUTHORIZED", "Unauthorized", 401);
   }
 
   const { role, brandId, storeId } = session.user;
   if (!brandId) {
-    return new NextResponse("Brand not found for user", { status: 400 });
+    return apiError("BRAND_NOT_FOUND", "Brand not found for user", 400);
   }
   if (!storeId) {
-    return new NextResponse("Store not found for user", { status: 400 });
+    return apiError("STORE_NOT_FOUND", "Store not found for user", 400);
   }
 
   if (role !== Role.MANAGER && role !== Role.STAFF) {
-    return new NextResponse("Forbidden", { status: 403 });
+    return apiError("FORBIDDEN", "Forbidden", 403);
   }
 
   const body = (await request.json()) as MenuItemInput;
 
   const name = body.name.trim();
   if (!name) {
-    return new NextResponse("Name is required", { status: 400 });
+    return apiError("NAME_REQUIRED", "Name is required", 400);
   }
 
   const price = Number.isFinite(body.price) ? Math.max(0, Math.round(body.price)) : 0;
@@ -346,25 +347,25 @@ export async function DELETE(request: Request) {
   const session = await getServerSession(authOptions);
 
   if (!session?.user) {
-    return new NextResponse("Unauthorized", { status: 401 });
+    return apiError("UNAUTHORIZED", "Unauthorized", 401);
   }
 
   const { role, brandId, storeId } = session.user;
   if (!brandId) {
-    return new NextResponse("Brand not found for user", { status: 400 });
+    return apiError("BRAND_NOT_FOUND", "Brand not found for user", 400);
   }
   if (!storeId) {
-    return new NextResponse("Store not found for user", { status: 400 });
+    return apiError("STORE_NOT_FOUND", "Store not found for user", 400);
   }
 
   if (role !== Role.MANAGER && role !== Role.STAFF) {
-    return new NextResponse("Forbidden", { status: 403 });
+    return apiError("FORBIDDEN", "Forbidden", 403);
   }
 
   const { searchParams } = new URL(request.url);
   const id = searchParams.get("id");
   if (!id) {
-    return new NextResponse("Missing id", { status: 400 });
+    return apiError("MISSING_ID", "Missing id", 400);
   }
 
   await prisma.menuItem.deleteMany({

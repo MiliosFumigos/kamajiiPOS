@@ -3,6 +3,7 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { Role } from "@/lib/types";
+import { apiError } from "@/lib/api-error";
 import {
   getCachedAnalytics,
   getOrCreateInFlightAnalytics,
@@ -67,13 +68,13 @@ function resolveDateRange(
 export async function GET(request: Request) {
   const session = await getServerSession(authOptions);
   if (!session?.user?.id) {
-    return new NextResponse("Unauthorized", { status: 401 });
+    return apiError("UNAUTHORIZED", "Unauthorized", 401);
   }
   if (session.user.role !== Role.OWNER && session.user.role !== Role.MANAGER) {
-    return new NextResponse("Forbidden", { status: 403 });
+    return apiError("FORBIDDEN", "Forbidden", 403);
   }
   if (!session.user.brandId) {
-    return new NextResponse("Brand not found for user", { status: 400 });
+    return apiError("BRAND_NOT_FOUND", "Brand not found for user", 400);
   }
 
   const { searchParams } = new URL(request.url);
@@ -91,7 +92,7 @@ export async function GET(request: Request) {
   const scopedStoreId = role === Role.MANAGER ? session.user.storeId : requestedStoreId;
 
   if (role === Role.MANAGER && !session.user.storeId) {
-    return new NextResponse("Store not found for manager", { status: 400 });
+    return apiError("STORE_NOT_FOUND", "Store not found for manager", 400);
   }
 
   const cacheKey = [

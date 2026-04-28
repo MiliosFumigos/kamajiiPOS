@@ -3,6 +3,7 @@ import bcrypt from "bcryptjs";
 import { prisma } from "@/lib/prisma";
 import { Role } from "@/lib/types";
 import { getSessionFromToken, requireRole } from "@/lib/rbac";
+import { apiError } from "@/lib/api-error";
 
 // 建立員工（STAFF） - 由分店長建立，同一品牌、同一分店
 export async function POST(request: NextRequest) {
@@ -15,17 +16,11 @@ export async function POST(request: NextRequest) {
     const { name, email, password } = body;
 
     if (!name || !email || !password) {
-      return NextResponse.json(
-        { error: "請提供姓名、電子信箱和密碼" },
-        { status: 400 }
-      );
+      return apiError("INVALID_INPUT", "請提供姓名、電子信箱和密碼", 400);
     }
 
     if (password.length < 8) {
-      return NextResponse.json(
-        { error: "密碼至少需要 8 個字元" },
-        { status: 400 }
-      );
+      return apiError("WEAK_PASSWORD", "密碼至少需要 8 個字元", 400);
     }
 
     // 取出分店長自己的資料，取得 brandId / storeId
@@ -35,10 +30,7 @@ export async function POST(request: NextRequest) {
     });
 
     if (!manager?.brandId || !manager.storeId) {
-      return NextResponse.json(
-        { error: "分店長尚未綁定品牌或分店，無法建立員工" },
-        { status: 400 }
-      );
+      return apiError("MANAGER_STORE_NOT_BOUND", "分店長尚未綁定品牌或分店，無法建立員工", 400);
     }
 
     // 檢查同品牌同 email 是否已存在
@@ -49,10 +41,7 @@ export async function POST(request: NextRequest) {
     });
 
     if (existingUser) {
-      return NextResponse.json(
-        { error: "此電子信箱已在該品牌中註冊" },
-        { status: 400 }
-      );
+      return apiError("EMAIL_ALREADY_EXISTS", "此電子信箱已在該品牌中註冊", 400);
     }
 
     const hashedPassword = await bcrypt.hash(password, 12);
@@ -81,7 +70,7 @@ export async function POST(request: NextRequest) {
   } catch (error) {
     console.error("Create staff error:", error);
     return NextResponse.json(
-      { error: "建立員工失敗，請稍後再試" },
+      { code: "STAFF_CREATE_FAILED", message: "建立員工失敗，請稍後再試" },
       { status: 500 }
     );
   }

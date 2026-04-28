@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import bcrypt from "bcryptjs";
 import { prisma } from "@/lib/prisma";
 import { Role } from "@/lib/types";
+import { apiError } from "@/lib/api-error";
 
 /**
  * Generate unique subdomain from brand name
@@ -26,17 +27,11 @@ export async function POST(request: NextRequest) {
     const { name, email, password } = body;
 
     if (!name || !email || !password) {
-      return NextResponse.json(
-        { error: "請提供姓名、電子信箱和密碼" },
-        { status: 400 }
-      );
+      return apiError("INVALID_INPUT", "請提供姓名、電子信箱和密碼", 400);
     }
 
     if (password.length < 8) {
-      return NextResponse.json(
-        { error: "密碼至少需要 8 個字元" },
-        { status: 400 }
-      );
+      return apiError("WEAK_PASSWORD", "密碼至少需要 8 個字元", 400);
     }
 
     // Check if email already exists as OWNER (same email can be in different brands)
@@ -48,10 +43,7 @@ export async function POST(request: NextRequest) {
     });
 
     if (existingOwner) {
-      return NextResponse.json(
-        { error: "此電子信箱已註冊為品牌持有人" },
-        { status: 400 }
-      );
+      return apiError("EMAIL_ALREADY_EXISTS", "此電子信箱已註冊為品牌持有人", 400);
     }
 
     const hashedPassword = await bcrypt.hash(password, 12);
@@ -116,7 +108,7 @@ export async function POST(request: NextRequest) {
   } catch (error) {
     console.error("Register error:", error);
     return NextResponse.json(
-      { error: "註冊失敗，請稍後再試" },
+      { code: "REGISTER_FAILED", message: "註冊失敗，請稍後再試" },
       { status: 500 }
     );
   }

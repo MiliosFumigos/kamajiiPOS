@@ -3,6 +3,7 @@ import bcrypt from "bcryptjs";
 import { prisma } from "@/lib/prisma";
 import { Role } from "@/lib/types";
 import { getSessionFromToken, requireRole } from "@/lib/rbac";
+import { apiError } from "@/lib/api-error";
 
 export async function POST(request: NextRequest) {
   const session = await getSessionFromToken(request);
@@ -14,25 +15,16 @@ export async function POST(request: NextRequest) {
     const { name, email, password, storeName } = body;
 
     if (!name || !email || !password || !storeName) {
-      return NextResponse.json(
-        { error: "請提供姓名、電子信箱、密碼與分店名稱" },
-        { status: 400 }
-      );
+      return apiError("INVALID_INPUT", "請提供姓名、電子信箱、密碼與分店名稱", 400);
     }
 
     if (password.length < 8) {
-      return NextResponse.json(
-        { error: "密碼至少需要 8 個字元" },
-        { status: 400 }
-      );
+      return apiError("WEAK_PASSWORD", "密碼至少需要 8 個字元", 400);
     }
 
     const brandId = session!.brandId;
     if (!brandId) {
-      return NextResponse.json(
-        { error: "您必須屬於某個品牌才能建立經理" },
-        { status: 400 }
-      );
+      return apiError("BRAND_NOT_FOUND", "您必須屬於某個品牌才能建立經理", 400);
     }
 
     // Check if email already exists in this brand
@@ -43,10 +35,7 @@ export async function POST(request: NextRequest) {
     });
 
     if (existingUser) {
-      return NextResponse.json(
-        { error: "此電子信箱已在該品牌中註冊" },
-        { status: 400 }
-      );
+      return apiError("EMAIL_ALREADY_EXISTS", "此電子信箱已在該品牌中註冊", 400);
     }
 
     const hashedPassword = await bcrypt.hash(password, 12);
@@ -92,7 +81,7 @@ export async function POST(request: NextRequest) {
   } catch (error) {
     console.error("Create manager error:", error);
     return NextResponse.json(
-      { error: "建立經理失敗，請稍後再試" },
+      { code: "MANAGER_CREATE_FAILED", message: "建立經理失敗，請稍後再試" },
       { status: 500 }
     );
   }

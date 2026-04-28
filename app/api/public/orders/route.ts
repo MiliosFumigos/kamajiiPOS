@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { z } from "zod";
 import { checkSimpleRateLimit, verifyOptionalSignature } from "@/lib/public-api-security";
+import { apiError } from "@/lib/api-error";
 
 function startOfDayUTC(d: Date) {
   return new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate()));
@@ -26,7 +27,7 @@ export async function GET(request: Request) {
     .safeParse(Object.fromEntries(searchParams.entries()));
 
   if (!parsed.success) {
-    return NextResponse.json({ error: "查詢參數格式錯誤" }, { status: 400 });
+    return apiError("INVALID_QUERY", "查詢參數格式錯誤", 400, parsed.error.flatten());
   }
 
   const { storeId, orderId, limit, sig, ts } = parsed.data;
@@ -46,9 +47,7 @@ export async function GET(request: Request) {
   });
   if (signatureError) return signatureError;
 
-  if (!storeId) {
-    return NextResponse.json({ error: "缺少 storeId" }, { status: 400 });
-  }
+  if (!storeId) return apiError("MISSING_STORE_ID", "缺少 storeId", 400);
 
   const now = new Date();
   const where: any = {

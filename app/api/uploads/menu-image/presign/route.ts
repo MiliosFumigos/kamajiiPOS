@@ -6,6 +6,7 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { getR2BucketName, getR2Client, getR2PublicBaseUrl } from "@/lib/r2";
 import { Role } from "@/lib/types";
+import { apiError } from "@/lib/api-error";
 
 const MAX_IMAGE_SIZE_BYTES = 2 * 1024 * 1024;
 const ALLOWED_CONTENT_TYPES = new Set(["image/webp", "image/jpeg", "image/png"]);
@@ -37,37 +38,34 @@ function formatDayKey(date = new Date()): string {
 export async function POST(request: Request) {
   const session = await getServerSession(authOptions);
   if (!session?.user) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    return apiError("UNAUTHORIZED", "Unauthorized", 401);
   }
 
   if (session.user.role !== Role.MANAGER && session.user.role !== Role.STAFF) {
-    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    return apiError("FORBIDDEN", "Forbidden", 403);
   }
 
   const brandId = session.user.brandId;
   const storeId = session.user.storeId;
   if (!brandId || !storeId) {
-    return NextResponse.json({ error: "Store/brand not found for user" }, { status: 400 });
+    return apiError("STORE_OR_BRAND_NOT_FOUND", "Store/brand not found for user", 400);
   }
 
   let body: PresignBody = {};
   try {
     body = (await request.json()) as PresignBody;
   } catch {
-    return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
+    return apiError("INVALID_JSON", "Invalid JSON body", 400);
   }
 
   const contentType = (body.contentType ?? "").trim().toLowerCase();
   const fileSize = Number(body.fileSize ?? 0);
   if (!ALLOWED_CONTENT_TYPES.has(contentType)) {
-    return NextResponse.json(
-      { error: "Only image/webp, image/jpeg, image/png are allowed" },
-      { status: 400 }
-    );
+    return apiError("INVALID_CONTENT_TYPE", "Only image/webp, image/jpeg, image/png are allowed", 400);
   }
 
   if (!Number.isFinite(fileSize) || fileSize <= 0 || fileSize > MAX_IMAGE_SIZE_BYTES) {
-    return NextResponse.json({ error: "Image must be <= 2MB" }, { status: 400 });
+    return apiError("INVALID_FILE_SIZE", "Image must be <= 2MB", 400);
   }
 
   const ext = guessExtension(contentType, body.fileName);
@@ -104,6 +102,6 @@ export async function POST(request: Request) {
     });
   } catch (error) {
     console.error(error);
-    return NextResponse.json({ error: "Failed to create upload URL" }, { status: 500 });
+    return apiError("PRESIGN_FAILED", "Failed to create upload URL", 500);
   }
 }

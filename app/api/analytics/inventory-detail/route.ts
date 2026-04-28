@@ -3,6 +3,7 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { Role } from "@/lib/types";
+import { apiError } from "@/lib/api-error";
 
 function toDayStartUTC(date: Date) {
   return new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate()));
@@ -35,15 +36,15 @@ function resolveDateRange(daysRaw: string | null, startDateRaw: string | null, e
 
 export async function GET(request: Request) {
   const session = await getServerSession(authOptions);
-  if (!session?.user?.id) return new NextResponse("Unauthorized", { status: 401 });
+  if (!session?.user?.id) return apiError("UNAUTHORIZED", "Unauthorized", 401);
   if (session.user.role !== Role.OWNER && session.user.role !== Role.MANAGER) {
-    return new NextResponse("Forbidden", { status: 403 });
+    return apiError("FORBIDDEN", "Forbidden", 403);
   }
-  if (!session.user.brandId) return new NextResponse("Brand not found for user", { status: 400 });
+  if (!session.user.brandId) return apiError("BRAND_NOT_FOUND", "Brand not found for user", 400);
 
   const { searchParams } = new URL(request.url);
   const ingredientId = searchParams.get("ingredientId")?.trim();
-  if (!ingredientId) return new NextResponse("Missing ingredientId", { status: 400 });
+  if (!ingredientId) return apiError("MISSING_INGREDIENT_ID", "Missing ingredientId", 400);
   const includeCancelled = searchParams.get("includeCancelled") !== "0";
 
   const { start, end, days } = resolveDateRange(
@@ -56,7 +57,7 @@ export async function GET(request: Request) {
   const scopedStoreId =
     session.user.role === Role.MANAGER ? session.user.storeId : requestedStoreId;
   if (session.user.role === Role.MANAGER && !session.user.storeId) {
-    return new NextResponse("Store not found for manager", { status: 400 });
+    return apiError("STORE_NOT_FOUND", "Store not found for manager", 400);
   }
 
   const stores = await prisma.store.findMany({

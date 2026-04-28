@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import bcrypt from "bcryptjs";
 import { prisma } from "@/lib/prisma";
 import { Role } from "@/lib/types";
+import { apiError } from "@/lib/api-error";
 
 type BrandOption = {
   brandId: string;
@@ -15,17 +16,14 @@ export async function POST(request: Request) {
   try {
     body = (await request.json()) as { email?: string; password?: string };
   } catch {
-    return NextResponse.json({ error: "請提供 JSON body" }, { status: 400 });
+    return apiError("INVALID_JSON", "請提供 JSON body", 400);
   }
 
   const email = body.email?.trim();
   const password = body.password ?? "";
 
   if (!email || !password) {
-    return NextResponse.json(
-      { error: "請輸入電子信箱和密碼" },
-      { status: 400 }
-    );
+    return apiError("INVALID_INPUT", "請輸入電子信箱和密碼", 400);
   }
 
   const users = await prisma.user.findMany({
@@ -49,7 +47,7 @@ export async function POST(request: Request) {
   });
 
   if (users.length === 0) {
-    return NextResponse.json({ error: "帳號或密碼不正確" }, { status: 401 });
+    return apiError("INVALID_CREDENTIALS", "帳號或密碼不正確", 401);
   }
 
   const options: BrandOption[] = [];
@@ -66,7 +64,7 @@ export async function POST(request: Request) {
   }
 
   if (options.length === 0) {
-    return NextResponse.json({ error: "帳號或密碼不正確" }, { status: 401 });
+    return apiError("INVALID_CREDENTIALS", "帳號或密碼不正確", 401);
   }
 
   const deduped = new Map<string, BrandOption>();

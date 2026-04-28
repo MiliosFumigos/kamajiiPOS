@@ -5,6 +5,7 @@ import { prisma } from "@/lib/prisma";
 import { Role } from "@/lib/types";
 import { buildEcpayCheckoutPayload, getEcpayCheckoutAction } from "@/lib/ecpay";
 import { z } from "zod";
+import { apiError } from "@/lib/api-error";
 
 type CreateOrderBody = {
   checkoutContext?: "POS" | "KIOSK";
@@ -275,12 +276,12 @@ export async function POST(request: Request) {
   try {
     body = (await request.json()) as CreateOrderBody;
   } catch {
-    return NextResponse.json({ error: "請提供 JSON body" }, { status: 400 });
+    return apiError("INVALID_JSON", "請提供 JSON body", 400);
   }
 
   const parsedBody = createOrderSchema.safeParse(body);
   if (!parsedBody.success) {
-    return NextResponse.json({ error: "訂單參數格式錯誤" }, { status: 400 });
+    return apiError("INVALID_ORDER_PAYLOAD", "訂單參數格式錯誤", 400, parsedBody.error.flatten());
   }
   const itemsInput = parsedBody.data.items;
   const checkoutContext = parsedBody.data.checkoutContext === "KIOSK" ? "KIOSK" : "POS";
@@ -293,7 +294,7 @@ export async function POST(request: Request) {
     ({ brandId, storeId, actorUserId } = await resolveBrandAndStore(request));
   } catch (e) {
     return NextResponse.json(
-      { error: e instanceof Error ? e.message : "Unauthorized" },
+      { code: "UNAUTHORIZED", message: e instanceof Error ? e.message : "Unauthorized" },
       { status: 401 }
     );
   }
@@ -622,7 +623,7 @@ export async function POST(request: Request) {
 
     if (!result.ok) {
       return NextResponse.json(
-        { error: result.error, details: (result as any).details ?? undefined },
+        { code: "ORDER_CONFLICT", message: result.error, details: (result as any).details ?? undefined },
         { status: result.code }
       );
     }
@@ -669,15 +670,12 @@ export async function POST(request: Request) {
   } catch (e) {
     if (e instanceof ApiConflictError) {
       return NextResponse.json(
-        { error: e.message, details: e.details ?? undefined },
+        { code: "ORDER_CONFLICT", message: e.message, details: e.details ?? undefined },
         { status: e.status }
       );
     }
     console.error(e);
-    return NextResponse.json(
-      { error: e instanceof Error ? e.message : "建立訂單失敗" },
-      { status: 500 }
-    );
+    return apiError("ORDER_CREATE_FAILED", e instanceof Error ? e.message : "建立訂單失敗", 500);
   }
 }
 
@@ -688,16 +686,16 @@ export async function POST(request: Request) {
 export async function GET(request: Request) {
   const session = await getServerSession(authOptions);
   if (!session?.user?.id) {
-    return new NextResponse("Unauthorized", { status: 401 });
+    return apiError("UNAUTHORIZED", "Unauthorized", 401);
   }
 
   if (session.user.role !== Role.MANAGER && session.user.role !== Role.STAFF) {
-    return new NextResponse("Forbidden", { status: 403 });
+    return apiError("FORBIDDEN", "Forbidden", 403);
   }
 
   const brandId = session.user.brandId;
   if (!brandId) {
-    return new NextResponse("Brand not found for user", { status: 400 });
+    return apiError("BRAND_NOT_FOUND", "Brand not found for user", 400);
   }
 
   const user = await prisma.user.findUnique({
@@ -714,13 +712,13 @@ export async function GET(request: Request) {
     }))?.id;
 
   if (!storeId) {
-    return new NextResponse("Store not found for brand", { status: 400 });
+    return apiError("STORE_NOT_FOUND", "Store not found for brand", 400);
   }
 
   const { searchParams } = new URL(request.url);
   const parsedQuery = listOrdersQuerySchema.safeParse(Object.fromEntries(searchParams.entries()));
   if (!parsedQuery.success) {
-    return NextResponse.json({ error: "查詢參數格式錯誤" }, { status: 400 });
+    return apiError("INVALID_QUERY", "查詢參數格式錯誤", 400, parsedQuery.error.flatten());
   }
   const { limit, date: dateParam } = parsedQuery.data;
 
@@ -824,16 +822,16 @@ export async function GET(request: Request) {
 export async function PATCH(request: Request) {
   const session = await getServerSession(authOptions);
   if (!session?.user?.id) {
-    return new NextResponse("Unauthorized", { status: 401 });
+    return apiError("UNAUTHORIZED", "Unauthorized", 401);
   }
 
   if (session.user.role !== Role.MANAGER && session.user.role !== Role.STAFF) {
-    return new NextResponse("Forbidden", { status: 403 });
+    return apiError("FORBIDDEN", "Forbidden", 403);
   }
 
   const brandId = session.user.brandId;
   if (!brandId) {
-    return new NextResponse("Brand not found for user", { status: 400 });
+    return apiError("BRAND_NOT_FOUND", "Brand not found for user", 400);
   }
 
   let body: { orderId?: string; status?: string; paymentStatus?: string } | null = null;
@@ -844,26 +842,26 @@ export async function PATCH(request: Request) {
       paymentStatus?: string;
     };
   } catch {
-    return NextResponse.json({ error: "請提供 JSON body" }, { status: 400 });
+    return apiError("INVALID_JSON", "請提供 JSON body", 400);
   }
 
   const parsedBody = patchOrderSchema.safeParse(body);
   if (!parsedBody.success) {
-    return NextResponse.json({ error: "更新參數格式錯誤" }, { status: 400 });
+    return apiError("INVALID_PATCH_PAYLOAD", "更新參數格式錯誤", 400, parsedBody.error.flatten());
   }
   const { orderId, status, paymentStatus } = parsedBody.data;
 
   if (status && !ALLOWED_STATUSES.includes(status as any)) {
-    return NextResponse.json({ error: "不支援的訂單狀態" }, { status: 400 });
+    return apiError("INVALID_STATUS", "不支援的訂單狀態", 400);
   }
 
   if (paymentStatus && !ALLOWED_PAYMENT_STATUSES.includes(paymentStatus as any)) {
-    return NextResponse.json({ error: "不支援的付款狀態" }, { status: 400 });
+    return apiError("INVALID_PAYMENT_STATUS", "不支援的付款狀態", 400);
   }
 
   const storeId = session.user.storeId;
   if (!storeId) {
-    return new NextResponse("Store not found for user", { status: 400 });
+    return apiError("STORE_NOT_FOUND", "Store not found for user", 400);
   }
 
   const scopedOrderWhere = { id: orderId, brandId, storeId };
@@ -881,7 +879,7 @@ export async function PATCH(request: Request) {
     },
   });
   if (!order) {
-    return NextResponse.json({ error: "找不到訂單" }, { status: 404 });
+    return apiError("ORDER_NOT_FOUND", "找不到訂單", 404);
   }
 
   const nextStatus = status ?? undefined;

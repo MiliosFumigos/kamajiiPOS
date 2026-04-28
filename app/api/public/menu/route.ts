@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { z } from "zod";
+import { apiError } from "@/lib/api-error";
 
 function startOfDayUTC(d: Date) {
   return new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate()));
@@ -77,10 +78,7 @@ export async function GET(request: Request) {
     .safeParse(Object.fromEntries(searchParams.entries()));
 
   if (!parsed.success) {
-    return NextResponse.json(
-      { error: "缺少 storeId（請使用分店專屬 QR code / 連結）" },
-      { status: 400 }
-    );
+    return apiError("MISSING_STORE_ID", "缺少 storeId（請使用分店專屬 QR code / 連結）", 400);
   }
   const { storeId } = parsed.data;
 
@@ -89,7 +87,7 @@ export async function GET(request: Request) {
     where: { id: storeId },
     select: { id: true, brandId: true },
   });
-  if (!store) return NextResponse.json({ error: "找不到該分店" }, { status: 404 });
+  if (!store) return apiError("STORE_NOT_FOUND", "找不到該分店", 404);
 
   const items = await prisma.menuItem.findMany({
     where: {
