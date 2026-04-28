@@ -4,6 +4,7 @@ import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { Role } from "@/lib/types";
 import { buildEcpayCheckoutPayload, getEcpayCheckoutAction } from "@/lib/ecpay";
+import { z } from "zod";
 
 type CreateOrderBody = {
   checkoutContext?: "POS" | "KIOSK";
@@ -14,6 +15,44 @@ type CreateOrderBody = {
     customizations?: { customizationId: string; quantity: number }[];
   }[];
 };
+
+const createOrderSchema = z.object({
+  checkoutContext: z.enum(["POS", "KIOSK"]).optional(),
+  paymentMethod: z.enum(["CASH", "CARD"]).optional(),
+  items: z
+    .array(
+      z.object({
+        menuItemId: z.string().trim().min(1),
+        quantity: z.coerce.number().int().positive(),
+        customizations: z
+          .array(
+            z.object({
+              customizationId: z.string().trim().min(1),
+              quantity: z.coerce.number().int().positive(),
+            })
+          )
+          .optional(),
+      })
+    )
+    .min(1),
+});
+
+const listOrdersQuerySchema = z.object({
+  limit: z.coerce.number().int().min(1).max(200).default(50),
+  date: z.string().trim().optional(),
+});
+
+const patchOrderSchema = z
+  .object({
+    orderId: z.string().trim().min(1),
+    status: z
+      .enum(["QUEUED", "IN_PROGRESS", "READY_FOR_PICKUP", "COMPLETED", "CANCELLED"])
+      .optional(),
+    paymentStatus: z.enum(["UNPAID", "PAID"]).optional(),
+  })
+  .refine((v) => Boolean(v.status || v.paymentStatus), {
+    message: "請至少提供 status 或 paymentStatus 其中一項",
+  });
 
 const ALLOWED_STATUSES = [
   "QUEUED",
@@ -227,12 +266,13 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "請提供 JSON body" }, { status: 400 });
   }
 
-  const itemsInput = body.items ?? [];
-  const checkoutContext = body.checkoutContext === "KIOSK" ? "KIOSK" : "POS";
-  const paymentMethod = body.paymentMethod === "CARD" ? "CARD" : "CASH";
-  if (!Array.isArray(itemsInput) || itemsInput.length === 0) {
-    return NextResponse.json({ error: "請至少選擇一個商品" }, { status: 400 });
+  const parsedBody = createOrderSchema.safeParse(body);
+  if (!parsedBody.success) {
+    return NextResponse.json({ error: "訂單參數格式錯誤" }, { status: 400 });
   }
+  const itemsInput = parsedBody.data.items;
+  const checkoutContext = parsedBody.data.checkoutContext === "KIOSK" ? "KIOSK" : "POS";
+  const paymentMethod = parsedBody.data.paymentMethod === "CARD" ? "CARD" : "CASH";
 
   let brandId = "";
   let storeId = "";
@@ -638,12 +678,11 @@ export async function GET(request: Request) {
   }
 
   const { searchParams } = new URL(request.url);
-  const limitRaw = Number(searchParams.get("limit") ?? "50");
-  const limit = Number.isFinite(limitRaw)
-    ? Math.min(200, Math.max(1, Math.floor(limitRaw)))
-    : 50;
-
-  const dateParam = searchParams.get("date");
+  const parsedQuery = listOrdersQuerySchema.safeParse(Object.fromEntries(searchParams.entries()));
+  if (!parsedQuery.success) {
+    return NextResponse.json({ error: "查詢參數格式錯誤" }, { status: 400 });
+  }
+  const { limit, date: dateParam } = parsedQuery.data;
 
   let dateFilter:
     | {
@@ -768,20 +807,11 @@ export async function PATCH(request: Request) {
     return NextResponse.json({ error: "請提供 JSON body" }, { status: 400 });
   }
 
-  const orderId = body.orderId?.trim();
-  const status = body.status?.trim();
-  const paymentStatus = body.paymentStatus?.trim();
-
-  if (!orderId) {
-    return NextResponse.json({ error: "缺少 orderId" }, { status: 400 });
+  const parsedBody = patchOrderSchema.safeParse(body);
+  if (!parsedBody.success) {
+    return NextResponse.json({ error: "更新參數格式錯誤" }, { status: 400 });
   }
-
-  if (!status && !paymentStatus) {
-    return NextResponse.json(
-      { error: "請至少提供 status 或 paymentStatus 其中一項" },
-      { status: 400 }
-    );
-  }
+  const { orderId, status, paymentStatus } = parsedBody.data;
 
   if (status && !ALLOWED_STATUSES.includes(status as any)) {
     return NextResponse.json({ error: "不支援的訂單狀態" }, { status: 400 });

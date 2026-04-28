@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { z } from "zod";
 
 function startOfDayUTC(d: Date) {
   return new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate()));
@@ -69,13 +70,19 @@ function mapItemsWithAvailability(
  */
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
-  const storeId = searchParams.get("storeId")?.trim();
-  if (!storeId) {
+  const parsed = z
+    .object({
+      storeId: z.string().trim().min(1),
+    })
+    .safeParse(Object.fromEntries(searchParams.entries()));
+
+  if (!parsed.success) {
     return NextResponse.json(
       { error: "缺少 storeId（請使用分店專屬 QR code / 連結）" },
       { status: 400 }
     );
   }
+  const { storeId } = parsed.data;
 
   // path-based 多租戶時，api 不可靠 host/subdomain，改用 storeId 直接查出品牌
   const store = await prisma.store.findUnique({

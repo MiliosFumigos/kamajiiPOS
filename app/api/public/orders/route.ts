@@ -1,5 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { z } from "zod";
+import { checkSimpleRateLimit, verifyOptionalSignature } from "@/lib/public-api-security";
 
 function startOfDayUTC(d: Date) {
   return new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate()));
@@ -13,12 +15,36 @@ function nextDayUTC(d: Date) {
 
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
-  const storeId = searchParams.get("storeId")?.trim();
-  const orderId = searchParams.get("orderId")?.trim();
-  const limitRaw = Number(searchParams.get("limit") ?? "50");
-  const limit = Number.isFinite(limitRaw)
-    ? Math.min(200, Math.max(1, Math.floor(limitRaw)))
-    : 50;
+  const parsed = z
+    .object({
+      storeId: z.string().trim().min(1),
+      orderId: z.string().trim().min(1).optional(),
+      limit: z.coerce.number().int().min(1).max(200).default(50),
+      sig: z.string().trim().optional(),
+      ts: z.string().trim().optional(),
+    })
+    .safeParse(Object.fromEntries(searchParams.entries()));
+
+  if (!parsed.success) {
+    return NextResponse.json({ error: "查詢參數格式錯誤" }, { status: 400 });
+  }
+
+  const { storeId, orderId, limit, sig, ts } = parsed.data;
+
+  const rateLimitError = checkSimpleRateLimit({
+    request,
+    scope: `public-orders:${storeId}`,
+    maxRequests: 120,
+    windowMs: 60_000,
+  });
+  if (rateLimitError) return rateLimitError;
+
+  const signatureError = verifyOptionalSignature({
+    storeId,
+    signature: sig ?? null,
+    ts: ts ?? null,
+  });
+  if (signatureError) return signatureError;
 
   if (!storeId) {
     return NextResponse.json({ error: "缺少 storeId" }, { status: 400 });
