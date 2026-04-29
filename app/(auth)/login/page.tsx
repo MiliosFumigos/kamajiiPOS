@@ -152,12 +152,18 @@ function LoginForm() {
       <Card className="w-full max-w-md">
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="flex justify-center">
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img
-              src="/brand-assets/kamajii-logo.png"
-              alt="Kamajii Logo"
-              className="h-16 w-auto object-contain"
-            />
+            <Link
+              href="/"
+              aria-label="回到首頁"
+              className="rounded-xl p-1 transition-all duration-200 hover:-translate-y-0.5 hover:opacity-90 hover:drop-shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 motion-reduce:transform-none"
+            >
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src="/brand-assets/kamajii-logo.png"
+                alt="Kamajii Logo"
+                className="h-16 w-auto object-contain"
+              />
+            </Link>
           </div>
           <h1 className="text-2xl font-bold text-slate-900">登入</h1>
           {error && (
