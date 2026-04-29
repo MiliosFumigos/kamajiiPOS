@@ -322,13 +322,6 @@ export default function KioskOrdersOverviewPage() {
             >
               立即更新
             </button>
-            <button
-              type="button"
-              onClick={() => router.push(kioskHomeHref)}
-              className="rounded-lg border border-brand-200 bg-gradient-to-r from-brand-50 to-emerald-50 px-3 py-2 text-sm font-medium text-brand-700 shadow-sm transition-all duration-300 hover:-translate-y-0.5 hover:border-brand-300 hover:from-brand-100 hover:to-emerald-100 hover:shadow-md"
-            >
-              回到點餐
-            </button>
           </div>
         </div>
       </Card>

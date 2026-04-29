@@ -73,7 +73,8 @@ export async function GET(request: Request) {
   if (session.user.role !== Role.OWNER && session.user.role !== Role.MANAGER) {
     return apiError("FORBIDDEN", "Forbidden", 403);
   }
-  if (!session.user.brandId) {
+  const brandId = session.user.brandId;
+  if (!brandId) {
     return apiError("BRAND_NOT_FOUND", "Brand not found for user", 400);
   }
 
@@ -97,7 +98,7 @@ export async function GET(request: Request) {
 
   const cacheKey = [
     "analytics-overview",
-    session.user.brandId,
+    brandId,
     role,
     scopedStoreId ?? "ALL",
     days,
@@ -123,7 +124,7 @@ export async function GET(request: Request) {
 
   const { promise, isNew } = getOrCreateInFlightAnalytics(cacheKey, async () => {
     const storeWhere = {
-      brandId: session.user.brandId,
+      brandId,
       ...(scopedStoreId ? { id: scopedStoreId } : {}),
     };
 
@@ -160,7 +161,7 @@ export async function GET(request: Request) {
     }
 
     const loaded = await loadOverviewData({
-      brandId: session.user.brandId,
+      brandId,
       storeIds: stores.map((s) => s.id),
       stores,
       start,

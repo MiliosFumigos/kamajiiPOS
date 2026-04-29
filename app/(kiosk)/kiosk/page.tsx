@@ -34,14 +34,6 @@ export default function KioskPage() {
 
   return (
     <div className="space-y-4">
-      <div className="flex justify-end">
-        <Link
-          href={ordersOverviewHref}
-          className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
-        >
-          查看訂單總覽
-        </Link>
-      </div>
       <OrderComposer
         title="Kiosk 點餐（免登入）"
         menuEndpoint={menuEndpoint}

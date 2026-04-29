@@ -69,7 +69,17 @@ export default function RegisterPage() {
     <main className="flex min-h-screen items-center justify-center bg-slate-50 px-4">
       <Card className="w-full max-w-md">
         <form onSubmit={handleSubmit} className="space-y-4">
-          <h1 className="text-2xl font-bold text-slate-900">註冊為品牌持有人</h1>
+          <div className="flex justify-center">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src="/brand-assets/kamajii-logo.png"
+              alt="Kamajii Logo"
+              className="h-16 w-auto object-contain"
+            />
+          </div>
+          <h1 className="text-2xl font-bold text-slate-900">
+            註冊為品牌持有人
+          </h1>
           <p className="text-sm text-slate-600">
             註冊後將自動建立您的品牌，並獲得專屬子網域
           </p>
@@ -108,7 +118,10 @@ export default function RegisterPage() {
           </Button>
           <p className="text-center text-sm text-slate-600">
             已有帳號？{" "}
-            <Link href="/login" className="font-medium text-brand-600 hover:underline">
+            <Link
+              href="/login"
+              className="font-medium text-brand-600 hover:underline"
+            >
               登入
             </Link>
           </p>

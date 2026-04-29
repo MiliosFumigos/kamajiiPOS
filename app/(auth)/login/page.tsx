@@ -15,7 +15,14 @@ function getBrandFromPath(): string | null {
   const parts = window.location.pathname.split("/").filter(Boolean);
   if (parts.length === 0) return null;
 
-  const rootRoutes = new Set(["login", "register", "app", "kiosk", "menu", "cart"]);
+  const rootRoutes = new Set([
+    "login",
+    "register",
+    "app",
+    "kiosk",
+    "menu",
+    "cart",
+  ]);
   if (parts.length === 1 && rootRoutes.has(parts[0])) return null;
 
   if (parts.length >= 2 && (parts[1] === "login" || parts[1] === "register")) {
@@ -144,6 +151,14 @@ function LoginForm() {
     <main className="flex min-h-screen items-center justify-center bg-slate-50 px-4">
       <Card className="w-full max-w-md">
         <form onSubmit={handleSubmit} className="space-y-4">
+          <div className="flex justify-center">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src="/brand-assets/kamajii-logo.png"
+              alt="Kamajii Logo"
+              className="h-16 w-auto object-contain"
+            />
+          </div>
           <h1 className="text-2xl font-bold text-slate-900">登入</h1>
           {error && (
             <div className="rounded-lg bg-red-50 p-3 text-sm text-red-700">
@@ -189,7 +204,9 @@ function LoginForm() {
         >
           <Card className="w-full max-w-md">
             <div className="space-y-3">
-              <h2 className="text-lg font-semibold text-slate-900">選擇登入品牌</h2>
+              <h2 className="text-lg font-semibold text-slate-900">
+                選擇登入品牌
+              </h2>
               <p className="text-sm text-slate-600">
                 這組帳號在多個品牌都有權限，請選擇這次要進入的品牌。
               </p>
@@ -224,8 +241,12 @@ function LoginForm() {
                     }}
                     disabled={loading}
                   >
-                    <p className="font-medium text-slate-900">{option.brandName}</p>
-                    <p className="text-xs text-slate-500">/{option.subdomain}</p>
+                    <p className="font-medium text-slate-900">
+                      {option.brandName}
+                    </p>
+                    <p className="text-xs text-slate-500">
+                      /{option.subdomain}
+                    </p>
                   </button>
                 ))}
               </div>
@@ -249,11 +270,13 @@ function LoginForm() {
 
 export default function LoginPage() {
   return (
-    <Suspense fallback={
-      <main className="flex min-h-screen items-center justify-center bg-slate-50">
-        <div className="text-slate-500">載入中...</div>
-      </main>
-    }>
+    <Suspense
+      fallback={
+        <main className="flex min-h-screen items-center justify-center bg-slate-50">
+          <div className="text-slate-500">載入中...</div>
+        </main>
+      }
+    >
       <LoginForm />
     </Suspense>
   );

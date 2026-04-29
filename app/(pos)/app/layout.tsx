@@ -4,6 +4,7 @@ import { authOptions } from "@/lib/auth";
 import { getBrandFromSubdomain } from "@/lib/brand-context";
 import { prisma } from "@/lib/prisma";
 import { DashboardShell } from "@/components/dashboard/DashboardShell";
+import { getBrandFaviconUrl, getBrandLogoUrl } from "@/lib/brand-assets";
 
 export default async function AppLayout({
   children,
@@ -17,12 +18,26 @@ export default async function AppLayout({
   // without a `/<brand>/` prefix), fall back to session.user.brandId to keep the app working.
   // For POS dashboard pages, `session.user.brandId` should be the source of truth.
   // This avoids any mismatch between URL brand and header parsing.
+  const brandSelect = {
+    id: true,
+    name: true,
+    subdomain: true,
+    logoUrl: true,
+    faviconUrl: true,
+  } as const;
+
   const brand =
     session?.user?.brandId
       ? await prisma.brand.findUnique({
           where: { id: session.user.brandId },
+          select: brandSelect,
         })
-      : brandFromHeader;
+      : brandFromHeader
+        ? await prisma.brand.findUnique({
+            where: { id: brandFromHeader.id },
+            select: brandSelect,
+          })
+        : null;
 
   if (!session) {
     if (brand) {
@@ -72,6 +87,8 @@ export default async function AppLayout({
     <DashboardShell
       topbarTitle="管理後台"
       brandName={brand.name}
+      brandLogoUrl={getBrandLogoUrl(brand.logoUrl)}
+      brandFaviconUrl={getBrandFaviconUrl(brand.faviconUrl)}
       brandSubdomain={brand.subdomain}
       userRole={session.user.role}
       userName={session.user.name ?? null}

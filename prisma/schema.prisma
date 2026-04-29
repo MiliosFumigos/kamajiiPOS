@@ -46,6 +46,8 @@ model Brand {
   id        String   @id @default(cuid())
   name      String
   subdomain String   @unique
+  logoUrl   String?
+  faviconUrl String?
   users     User[]
   stores    Store[]
   ingredients Ingredient[]
