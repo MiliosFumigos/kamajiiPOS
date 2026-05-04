@@ -144,7 +144,7 @@ export function DashboardShell({
           brandLogoUrl={currentLogoUrl}
           onMenuClick={() => setMobileOpen(true)}
         />
-        <main className="flex-1 overflow-auto bg-slate-50 p-4 md:p-6">
+        <main className="flex-1 overflow-auto bg-slate-50 p-4 md:p-6 [scrollbar-gutter:stable]">
           {children}
         </main>
       </div>
