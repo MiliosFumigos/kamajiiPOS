@@ -61,6 +61,8 @@ const ALLOWED_IMAGE_TYPES = ["image/webp", "image/jpeg", "image/png"] as const;
 const IMAGE_CROP_ASPECT = 4 / 3;
 const DEFAULT_CROP = { x: 0, y: 0 };
 const DEFAULT_ZOOM = 1;
+const MIN_ZOOM = 0.5;
+const MAX_ZOOM = 3;
 
 async function createImageElement(src: string): Promise<HTMLImageElement> {
   return new Promise((resolve, reject) => {
@@ -697,6 +699,10 @@ export default function AppMenuPage() {
                   crop={cropPosition}
                   zoom={cropZoom}
                   aspect={IMAGE_CROP_ASPECT}
+                  minZoom={MIN_ZOOM}
+                  maxZoom={MAX_ZOOM}
+                  restrictPosition={false}
+                  objectFit="contain"
                   onCropChange={setCropPosition}
                   onZoomChange={setCropZoom}
                   onCropComplete={(_, pixels) => setCroppedAreaPixels(pixels)}
@@ -708,8 +714,8 @@ export default function AppMenuPage() {
                 <label className="block text-xs font-medium text-slate-700">縮放</label>
                 <input
                   type="range"
-                  min={1}
-                  max={3}
+                  min={MIN_ZOOM}
+                  max={MAX_ZOOM}
                   step={0.01}
                   value={cropZoom}
                   onChange={(e) => setCropZoom(Number(e.target.value))}
