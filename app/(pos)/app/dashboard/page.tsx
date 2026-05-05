@@ -80,12 +80,13 @@ export default async function AppDashboardPage() {
 
   return (
     <div className="space-y-5 sm:space-y-6">
-      <h2 className="text-lg font-semibold text-slate-900 sm:text-xl">
-        分店與 Kiosk 設定
-      </h2>
+      <div className="dashboard-print-kiosk-section space-y-5 sm:space-y-6 print:break-inside-avoid-page print:break-after-page">
+        <h2 className="text-lg font-semibold text-slate-900 sm:text-xl">
+          分店與 Kiosk 設定
+        </h2>
 
-      <Card>
-        <div className="flex flex-col gap-5 p-3 sm:gap-6 sm:p-4 lg:grid lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto] lg:items-start lg:gap-5">
+        <Card className="print:break-inside-avoid-page">
+          <div className="flex flex-col gap-5 p-3 sm:gap-6 sm:p-4 lg:grid lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto] lg:items-start lg:gap-5">
           <div className="space-y-4 min-w-0 overflow-x-hidden lg:min-w-0">
             <div>
               <p className="text-xs font-medium text-slate-500">分店名稱</p>
@@ -172,8 +173,9 @@ export default async function AppDashboardPage() {
               掃描後可直接進入此分店 Kiosk
             </p>
           </div>
-        </div>
-      </Card>
+          </div>
+        </Card>
+      </div>
 
       {currentUser.role === Role.OWNER && <BrandAssetsEditor />}
 

@@ -118,10 +118,10 @@ export function DashboardShell({
   }, [currentFaviconUrl]);
 
   return (
-    <div className="flex h-screen overflow-hidden">
+    <div className="flex h-screen overflow-hidden print:h-auto print:min-h-0 print:overflow-visible">
       {mobileOpen && (
         <div
-          className="fixed inset-0 z-40 bg-slate-900/50 md:hidden"
+          className="fixed inset-0 z-40 bg-slate-900/50 print:hidden md:hidden"
           aria-hidden
           onClick={() => setMobileOpen(false)}
         />
@@ -137,14 +137,15 @@ export function DashboardShell({
         desktopCollapsed={desktopCollapsed}
         onToggleDesktopCollapse={() => setDesktopCollapsed((v) => !v)}
       />
-      <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
+      <div className="flex min-w-0 flex-1 flex-col overflow-hidden print:min-h-0 print:flex-1 print:overflow-visible">
         <Topbar
           title={topbarTitle}
           brandName={brandName}
           brandLogoUrl={currentLogoUrl}
+          logoHref={`/${brandSubdomain}/app/dashboard`}
           onMenuClick={() => setMobileOpen(true)}
         />
-        <main className="flex-1 overflow-auto bg-slate-50 p-4 md:p-6 [scrollbar-gutter:stable]">
+        <main className="flex-1 overflow-auto bg-slate-50 p-4 md:p-6 [scrollbar-gutter:stable] print:overflow-visible print:bg-white print:[scrollbar-gutter:auto]">
           {children}
         </main>
       </div>

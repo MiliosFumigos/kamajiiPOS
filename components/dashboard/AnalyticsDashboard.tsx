@@ -510,8 +510,29 @@ export function AnalyticsDashboard() {
     downloadCsv(`inventory-burn-${Date.now()}.csv`, rows);
   };
 
+  const openBrowserPrintForPdf = () => {
+    const chartInstances = [
+      peakHourChartInstanceRef.current,
+      paymentChartInstanceRef.current,
+      salesTrendChartInstanceRef.current,
+      storeComparisonChartInstanceRef.current,
+    ];
+    for (const inst of chartInstances) {
+      if (inst && typeof inst.resize === "function") {
+        try {
+          inst.resize();
+        } catch {
+          // ignore
+        }
+      }
+    }
+    window.requestAnimationFrame(() => {
+      window.setTimeout(() => window.print(), 220);
+    });
+  };
+
   return (
-    <div className="space-y-4">
+    <div id="analytics-dashboard-print" className="space-y-4">
       <Card>
         <div className="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
           <div>
@@ -611,9 +632,18 @@ export function AnalyticsDashboard() {
               setRefreshToken((v) => v + 1);
             }}
             disabled={loading || isForceRefreshing || !!customRangeError}
-            className="rounded-md border border-slate-200 px-3 py-1.5 text-sm text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60"
+            className="rounded-md border border-slate-200 px-3 py-1.5 text-sm text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60 print:hidden"
           >
             {isForceRefreshing ? "重算中..." : "立即更新（從資料庫重算）"}
+          </button>
+          <button
+            type="button"
+            onClick={openBrowserPrintForPdf}
+            disabled={loading}
+            title="會開啟列印視窗，請選擇「另存為 PDF」"
+            className="rounded-md border border-slate-200 px-3 py-1.5 text-sm text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60 print:hidden"
+          >
+            另存 PDF（列印）
           </button>
         </div>
       </Card>

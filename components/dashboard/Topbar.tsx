@@ -1,15 +1,25 @@
 "use client";
 
+import Link from "next/link";
+
 interface TopbarProps {
   title: string;
   brandName: string;
   brandLogoUrl: string;
+  /** 點擊 Logo 前往的路徑（例如已登入時的總覽頁） */
+  logoHref: string;
   onMenuClick?: () => void;
 }
 
-export function Topbar({ title, brandName, brandLogoUrl, onMenuClick }: TopbarProps) {
+export function Topbar({
+  title,
+  brandName,
+  brandLogoUrl,
+  logoHref,
+  onMenuClick,
+}: TopbarProps) {
   return (
-    <header className="grid h-14 shrink-0 grid-cols-[40px_minmax(0,1fr)_40px] items-center gap-2 border-b border-slate-200 bg-white px-4 md:grid-cols-[1fr_auto_1fr] md:px-6">
+    <header className="grid h-14 shrink-0 grid-cols-[40px_minmax(0,1fr)_40px] items-center gap-2 border-b border-slate-200 bg-white px-4 print:hidden md:grid-cols-[1fr_auto_1fr] md:px-6">
       <div className="flex items-center">
         {onMenuClick && (
           <button
@@ -37,16 +47,24 @@ export function Topbar({ title, brandName, brandLogoUrl, onMenuClick }: TopbarPr
       </div>
 
       <div className="justify-self-center">
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img
-          src={brandLogoUrl}
-          alt={`${brandName} Logo`}
-          className="h-14 w-auto object-contain"
-        />
+        <Link
+          href={logoHref}
+          className="group inline-flex items-center justify-center rounded-lg px-2"
+          aria-label="回到總覽"
+        >
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src={brandLogoUrl}
+            alt={`${brandName} Logo`}
+            className="h-14 w-auto object-contain transition-transform duration-150 ease-out group-hover:scale-[1.03]"
+          />
+        </Link>
       </div>
 
       <div className="flex items-center justify-end">
-        <span className="hidden text-sm font-medium text-slate-500 md:block">{title}</span>
+        <span className="hidden text-sm font-medium text-slate-500 md:block">
+          {title}
+        </span>
       </div>
     </header>
   );
