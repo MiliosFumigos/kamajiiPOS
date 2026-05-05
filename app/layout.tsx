@@ -17,7 +17,9 @@ export const metadata: Metadata = {
     siteName: "Kamajii POS",
     images: [
       {
-        url: "/brand-assets/kamajii-logo.png",
+        url: "https://kamajii-pos.vercel.app/brand-assets/kamajii-logo.png",
+        width: 1200,
+        height: 630,
         alt: "Kamajii Logo",
       },
     ],
@@ -26,7 +28,7 @@ export const metadata: Metadata = {
     card: "summary_large_image",
     title: "Kamajii POS - 智能餐飲管理系統",
     description: "多租戶 SaaS POS 系統，助力您的餐飲事業",
-    images: ["/brand-assets/kamajii-logo.png"],
+    images: ["https://kamajii-pos.vercel.app/brand-assets/kamajii-logo.png"],
   },
 };
 
