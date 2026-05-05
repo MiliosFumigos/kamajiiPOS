@@ -6,6 +6,8 @@ import { Role } from "@/lib/types";
 import { apiError } from "@/lib/api-error";
 import { getBrandFaviconUrl, getBrandLogoUrl } from "@/lib/brand-assets";
 
+export const dynamic = "force-dynamic";
+
 type BrandAssetsPayload = {
   logoUrl: string | null;
   faviconUrl: string | null;
