@@ -573,8 +573,35 @@ export async function POST(request: Request) {
         data: { total },
       });
 
-      // 封存客人固定看的 ETA：當訂單進入 QUEUED 時計算一次
-      const activeForCustomerEta = await tx.order.findMany({
+      return {
+        ok: true as const,
+        order: {
+          id: createdOrder.id,
+          displayId: createdOrder.displayId,
+          placedAt: createdOrder.placedAt,
+          total,
+          paymentStatus: "UNPAID",
+          paymentMethod,
+          status: createdOrder.status,
+        },
+        paymentMethod,
+      };
+    }, {
+      // 雲端環境延遲較高，放寬互動式 transaction 時間避免 5 秒逾時
+      maxWait: 10_000,
+      timeout: 15_000,
+    });
+
+    if (!result.ok) {
+      return NextResponse.json(
+        { code: "ORDER_CONFLICT", message: result.error, details: (result as any).details ?? undefined },
+        { status: result.code }
+      );
+    }
+
+    // 封存客人固定看的 ETA：移到 transaction 之外，降低交易持鎖時間與逾時風險
+    try {
+      const activeForCustomerEta = await prisma.order.findMany({
         where: {
           brandId,
           storeId,
@@ -599,33 +626,15 @@ export async function POST(request: Request) {
         now
       );
 
-      await tx.order.update({
-        where: { id: createdOrder.id },
+      await prisma.order.update({
+        where: { id: result.order.id },
         data: {
-          customerEta: staffEtaByIdForCustomer.get(createdOrder.id) ?? null,
+          customerEta: staffEtaByIdForCustomer.get(result.order.id) ?? null,
         },
       });
-
-      return {
-        ok: true as const,
-        order: {
-          id: createdOrder.id,
-          displayId: createdOrder.displayId,
-          placedAt: createdOrder.placedAt,
-          total,
-          paymentStatus: "UNPAID",
-          paymentMethod,
-          status: createdOrder.status,
-        },
-        paymentMethod,
-      };
-    });
-
-    if (!result.ok) {
-      return NextResponse.json(
-        { code: "ORDER_CONFLICT", message: result.error, details: (result as any).details ?? undefined },
-        { status: result.code }
-      );
+    } catch (etaError) {
+      // ETA 封存失敗不影響下單主流程（避免把可建立的訂單變成 500）
+      console.error("Archive customer ETA failed:", etaError);
     }
 
     if (paymentMethod === "CARD") {

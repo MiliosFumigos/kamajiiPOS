@@ -3,8 +3,7 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { Role } from "@/lib/types";
-import type { Prisma } from "@prisma/client";
-import { PrismaClientKnownRequestError } from "@prisma/client/runtime/library";
+import { Prisma } from "@prisma/client";
 import { apiError } from "@/lib/api-error";
 
 type IngredientWithInventory = Prisma.IngredientGetPayload<{
@@ -84,7 +83,7 @@ export async function POST(request: Request) {
 
     await prisma.$transaction(async (tx) => {
       for (const item of items) {
-        const name = item.name.trim();
+        const name = String(item.name ?? "").trim();
         const unit = (item.unit || "份").trim() || "份";
         const quantity = Number.isFinite(item.quantity)
           ? Math.max(0, Math.floor(item.quantity))
@@ -144,6 +143,9 @@ export async function POST(request: Request) {
           },
         });
       }
+    }, {
+      maxWait: 10_000,
+      timeout: 15_000,
     });
 
     const ingredients: IngredientWithInventory[] =
@@ -169,11 +171,24 @@ export async function POST(request: Request) {
 
     return NextResponse.json({ items: itemsResult });
   } catch (error) {
-    if (error instanceof PrismaClientKnownRequestError && error.code === "P2002") {
+    const prismaCode = error instanceof Prisma.PrismaClientKnownRequestError
+      ? error.code
+      : typeof error === "object" && error !== null && "code" in error
+        ? String((error as { code?: unknown }).code ?? "")
+        : "";
+
+    if (prismaCode === "P2002") {
       return apiError(
         "INVENTORY_DUPLICATE_NAME",
         "同分店已有相同原料名稱，請更換名稱後再儲存",
         409
+      );
+    }
+    if (prismaCode === "P2028") {
+      return apiError(
+        "INVENTORY_TX_TIMEOUT",
+        "庫存儲存逾時，請稍後再試",
+        503
       );
     }
 
