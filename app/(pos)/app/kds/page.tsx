@@ -95,6 +95,7 @@ export default function AppKdsPage() {
   const canUseKds = role === Role.MANAGER || role === Role.STAFF;
 
   const [orders, setOrders] = useState<Order[]>([]);
+  const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState<string | null>(null);
@@ -177,6 +178,7 @@ export default function AppKdsPage() {
       }
 
       setOrders(nextOrders);
+      setLastUpdated(new Date());
     } catch (e) {
       console.error(e);
       setError("無法載入訂單，請稍後再試。");
@@ -250,8 +252,6 @@ export default function AppKdsPage() {
     () => active.filter((o) => o.status === "READY_FOR_PICKUP"),
     [active]
   );
-
-  const lastUpdated = useMemo(() => new Date(), [orders]);
 
   const loadingOverlay = useMemo(() => {
     if (saving) {
@@ -530,7 +530,7 @@ export default function AppKdsPage() {
           <p className="px-4 py-3 text-sm text-red-600">{error}</p>
         ) : (
           <div className="border-b border-slate-200 px-4 py-3 text-xs text-slate-500">
-            最後更新：{formatTime(lastUpdated)}
+            最後更新：{lastUpdated ? formatTime(lastUpdated) : "--:--"}
           </div>
         )}
 
