@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Inter } from "next/font/google";
 import "./globals.css";
 import { Providers } from "./providers";
+import { DEFAULT_BRAND_FAVICON_URL } from "@/lib/brand-assets";
 
 const inter = Inter({ subsets: ["latin"] });
 
@@ -9,6 +10,11 @@ export const metadata: Metadata = {
   metadataBase: new URL("https://kamajii-pos.vercel.app"),
   title: "Kamajii POS - 智能餐飲管理系統",
   description: "多租戶 SaaS POS 系統，助力您的餐飲事業",
+  icons: {
+    icon: DEFAULT_BRAND_FAVICON_URL,
+    shortcut: DEFAULT_BRAND_FAVICON_URL,
+    apple: DEFAULT_BRAND_FAVICON_URL,
+  },
   openGraph: {
     type: "website",
     url: "https://kamajii-pos.vercel.app",

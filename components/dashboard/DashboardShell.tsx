@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { Sidebar } from "@/components/dashboard/Sidebar";
 import { Topbar } from "@/components/dashboard/Topbar";
+import { DEFAULT_BRAND_FAVICON_URL } from "@/lib/brand-assets";
 
 const BRAND_ASSETS_UPDATED_EVENT = "brand-assets-updated";
 
@@ -98,23 +99,33 @@ export function DashboardShell({
       'link[rel="apple-touch-icon"]',
     ];
 
-    for (const selector of relSelectors) {
-      const links = Array.from(head.querySelectorAll<HTMLLinkElement>(selector));
-      if (links.length === 0) {
-        const link = document.createElement("link");
-        link.rel = selector.includes("apple-touch-icon")
-          ? "apple-touch-icon"
-          : selector.includes("shortcut")
-            ? "shortcut icon"
-            : "icon";
-        link.href = currentFaviconUrl;
-        head.appendChild(link);
-      } else {
-        for (const link of links) {
-          link.href = currentFaviconUrl;
+    const applyFaviconUrl = (url: string) => {
+      for (const selector of relSelectors) {
+        const links = Array.from(head.querySelectorAll<HTMLLinkElement>(selector));
+        if (links.length === 0) {
+          const link = document.createElement("link");
+          link.rel = selector.includes("apple-touch-icon")
+            ? "apple-touch-icon"
+            : selector.includes("shortcut")
+              ? "shortcut icon"
+              : "icon";
+          link.href = url;
+          head.appendChild(link);
+        } else {
+          for (const link of links) {
+            link.href = url;
+          }
         }
       }
-    }
+    };
+
+    applyFaviconUrl(currentFaviconUrl);
+
+    // When leaving the POS dashboard (e.g. logout), restore to default favicon
+    // so we don't keep a previous brand's custom favicon.
+    return () => {
+      applyFaviconUrl(DEFAULT_BRAND_FAVICON_URL);
+    };
   }, [currentFaviconUrl]);
 
   return (
